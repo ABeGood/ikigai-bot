@@ -1,0 +1,353 @@
+15260-DEBUG-start
+15260-DEBUG-load_ssl_context verify=True cert=None trust_env=True http2=False
+15260-DEBUG-load_verify_locations cafile='d:\\Projects\\ikigai-bot\\.venv\\lib\\site-packages\\certifi\\cacert.pem'
+15260-DEBUG-load_ssl_context verify=True cert=None trust_env=True http2=False
+15260-DEBUG-load_verify_locations cafile='d:\\Projects\\ikigai-bot\\.venv\\lib\\site-packages\\certifi\\cacert.pem'
+15260-DEBUG-Using proactor: IocpProactor
+15260-DEBUG-Entering: get_me
+15260-DEBUG-connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+15260-DEBUG-connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000026CB17D1510>
+15260-DEBUG-start_tls.started ssl_context=<ssl.SSLContext object at 0x0000026CB17A9F40> server_hostname='api.telegram.org' timeout=5.0
+15260-DEBUG-start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000026CB17D1A50>
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 19:59:16 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'230'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getMe "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-User(api_kwargs={'can_connect_to_business': False}, can_join_groups=True, can_read_all_group_messages=False, first_name='ikigai', id=7033123838, is_bot=True, supports_inline_queries=True, username='Ikigai_Coworking_Bot')
+15260-DEBUG-Exiting: get_me
+15260-DEBUG-This Bot is already initialized.
+15260-DEBUG-Updater started (polling)
+15260-DEBUG-Start network loop retry bootstrap del webhook
+15260-DEBUG-Deleting webhook
+15260-DEBUG-Entering: delete_webhook
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 19:59:16 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'68'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/deleteWebhook "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-True
+15260-DEBUG-Exiting: delete_webhook
+15260-DEBUG-Bootstrap done
+15260-DEBUG-Waiting for polling to start
+15260-DEBUG-Polling updates from Telegram started
+15260-DEBUG-Start network loop retry getting Updates
+15260-DEBUG-Entering: get_updates
+15260-INFO-Application started
+15260-DEBUG-connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+15260-DEBUG-connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000026CB17D16F0>
+15260-DEBUG-start_tls.started ssl_context=<ssl.SSLContext object at 0x0000026CB17AA140> server_hostname='api.telegram.org' timeout=5.0
+15260-DEBUG-start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000026CB17D15D0>
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 19:59:16 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'1313'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-Getting updates: [252073303]
+15260-DEBUG-(Update(callback_query=CallbackQuery(chat_instance='5752383836567190392', data='cbcal_0_s_y_2025_4_20', from_user=User(first_name='Андрей', id=468997622, is_bot=False, language_code='en', username='A_feelsgood'), id='2014329450987931396', message=Message(channel_chat_created=False, chat=Chat(first_name='Андрей', id=468997622, type=<ChatType.PRIVATE>, username='A_feelsgood'), date=datetime.datetime(2024, 4, 20, 19, 57, 34, tzinfo=datetime.timezone.utc), delete_chat_photo=False, from_user=User(first_name='ikigai', id=7033123838, is_bot=True, username='Ikigai_Coworking_Bot'), group_chat_created=False, message_id=724, reply_markup=InlineKeyboardMarkup(inline_keyboard=((InlineKeyboardButton(callback_data='cbcal_0_s_y_2023_4_20', text='2023'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2024_4_20', text='2024')), (InlineKeyboardButton(callback_data='cbcal_0_s_y_2025_4_20', text='2025'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2026_4_20', text='2026')), (InlineKeyboardButton(callback_data='cbcal_0_g_y_2020_4_20', text='<<'), InlineKeyboardButton(callback_data='cbcal_0_n', text=' '), InlineKeyboardButton(callback_data='cbcal_0_g_y_2028_4_20', text='>>')))), supergroup_chat_created=False, text='Выберете день, в который вы хотите забронировать рабочее место.')), update_id=252073303),)
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Processing update Update(callback_query=CallbackQuery(chat_instance='5752383836567190392', data='cbcal_0_s_y_2025_4_20', from_user=User(first_name='Андрей', id=468997622, is_bot=False, language_code='en', username='A_feelsgood'), id='2014329450987931396', message=Message(channel_chat_created=False, chat=Chat(first_name='Андрей', id=468997622, type=<ChatType.PRIVATE>, username='A_feelsgood'), date=datetime.datetime(2024, 4, 20, 19, 57, 34, tzinfo=datetime.timezone.utc), delete_chat_photo=False, from_user=User(first_name='ikigai', id=7033123838, is_bot=True, username='Ikigai_Coworking_Bot'), group_chat_created=False, message_id=724, reply_markup=InlineKeyboardMarkup(inline_keyboard=((InlineKeyboardButton(callback_data='cbcal_0_s_y_2023_4_20', text='2023'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2024_4_20', text='2024')), (InlineKeyboardButton(callback_data='cbcal_0_s_y_2025_4_20', text='2025'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2026_4_20', text='2026')), (InlineKeyboardButton(callback_data='cbcal_0_g_y_2020_4_20', text='<<'), InlineKeyboardButton(callback_data='cbcal_0_n', text=' '), InlineKeyboardButton(callback_data='cbcal_0_g_y_2028_4_20', text='>>')))), supergroup_chat_created=False, text='Выберете день, в который вы хотите забронировать рабочее место.')), update_id=252073303)
+15260-DEBUG-Selecting conversation (468997622, 468997622) with state None
+15260-ERROR-No error handlers are registered, logging exception.
+Traceback (most recent call last):
+  File "d:\Projects\ikigai-bot\.venv\lib\site-packages\telegram\ext\_application.py", line 1264, in process_update
+    await coroutine
+  File "d:\Projects\ikigai-bot\.venv\lib\site-packages\telegram\ext\_handlers\basehandler.py", line 157, in handle_update
+    return await self.callback(update, context)
+  File "d:\Projects\ikigai-bot\dialog.py", line 166, in calendarCallback
+    result, key, step = DetailedTelegramCalendar().process(update.callback_query)
+  File "d:\Projects\ikigai-bot\.venv\lib\site-packages\telegram_bot_calendar\base.py", line 107, in process
+    return self._process(call_data)
+  File "d:\Projects\ikigai-bot\.venv\lib\site-packages\telegram_bot_calendar\detailed.py", line 34, in _process
+    params = call_data.split("_")
+AttributeError: 'CallbackQuery' object has no attribute 'split'
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 19:59:23 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'1313'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-Getting updates: [252073304]
+15260-DEBUG-(Update(callback_query=CallbackQuery(chat_instance='5752383836567190392', data='cbcal_0_g_y_2028_4_20', from_user=User(first_name='Андрей', id=468997622, is_bot=False, language_code='en', username='A_feelsgood'), id='2014329450053883483', message=Message(channel_chat_created=False, chat=Chat(first_name='Андрей', id=468997622, type=<ChatType.PRIVATE>, username='A_feelsgood'), date=datetime.datetime(2024, 4, 20, 19, 57, 34, tzinfo=datetime.timezone.utc), delete_chat_photo=False, from_user=User(first_name='ikigai', id=7033123838, is_bot=True, username='Ikigai_Coworking_Bot'), group_chat_created=False, message_id=724, reply_markup=InlineKeyboardMarkup(inline_keyboard=((InlineKeyboardButton(callback_data='cbcal_0_s_y_2023_4_20', text='2023'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2024_4_20', text='2024')), (InlineKeyboardButton(callback_data='cbcal_0_s_y_2025_4_20', text='2025'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2026_4_20', text='2026')), (InlineKeyboardButton(callback_data='cbcal_0_g_y_2020_4_20', text='<<'), InlineKeyboardButton(callback_data='cbcal_0_n', text=' '), InlineKeyboardButton(callback_data='cbcal_0_g_y_2028_4_20', text='>>')))), supergroup_chat_created=False, text='Выберете день, в который вы хотите забронировать рабочее место.')), update_id=252073304),)
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Processing update Update(callback_query=CallbackQuery(chat_instance='5752383836567190392', data='cbcal_0_g_y_2028_4_20', from_user=User(first_name='Андрей', id=468997622, is_bot=False, language_code='en', username='A_feelsgood'), id='2014329450053883483', message=Message(channel_chat_created=False, chat=Chat(first_name='Андрей', id=468997622, type=<ChatType.PRIVATE>, username='A_feelsgood'), date=datetime.datetime(2024, 4, 20, 19, 57, 34, tzinfo=datetime.timezone.utc), delete_chat_photo=False, from_user=User(first_name='ikigai', id=7033123838, is_bot=True, username='Ikigai_Coworking_Bot'), group_chat_created=False, message_id=724, reply_markup=InlineKeyboardMarkup(inline_keyboard=((InlineKeyboardButton(callback_data='cbcal_0_s_y_2023_4_20', text='2023'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2024_4_20', text='2024')), (InlineKeyboardButton(callback_data='cbcal_0_s_y_2025_4_20', text='2025'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2026_4_20', text='2026')), (InlineKeyboardButton(callback_data='cbcal_0_g_y_2020_4_20', text='<<'), InlineKeyboardButton(callback_data='cbcal_0_n', text=' '), InlineKeyboardButton(callback_data='cbcal_0_g_y_2028_4_20', text='>>')))), supergroup_chat_created=False, text='Выберете день, в который вы хотите забронировать рабочее место.')), update_id=252073304)
+15260-DEBUG-Selecting conversation (468997622, 468997622) with state None
+15260-ERROR-No error handlers are registered, logging exception.
+Traceback (most recent call last):
+  File "d:\Projects\ikigai-bot\.venv\lib\site-packages\telegram\ext\_application.py", line 1264, in process_update
+    await coroutine
+  File "d:\Projects\ikigai-bot\.venv\lib\site-packages\telegram\ext\_handlers\basehandler.py", line 157, in handle_update
+    return await self.callback(update, context)
+  File "d:\Projects\ikigai-bot\dialog.py", line 166, in calendarCallback
+    result, key, step = DetailedTelegramCalendar().process(update.callback_query)
+  File "d:\Projects\ikigai-bot\.venv\lib\site-packages\telegram_bot_calendar\base.py", line 107, in process
+    return self._process(call_data)
+  File "d:\Projects\ikigai-bot\.venv\lib\site-packages\telegram_bot_calendar\detailed.py", line 34, in _process
+    params = call_data.split("_")
+AttributeError: 'CallbackQuery' object has no attribute 'split'
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 19:59:35 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 19:59:45 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 19:59:55 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:00:05 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:00:15 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:00:25 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:00:35 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:00:45 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:00:55 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:01:05 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:01:15 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:01:26 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:01:36 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:01:46 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:01:56 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-No new updates found.
+15260-DEBUG-()
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Entering: get_updates
+15260-DEBUG-send_request_headers.started request=<Request [b'POST']>
+15260-DEBUG-send_request_headers.complete
+15260-DEBUG-send_request_body.started request=<Request [b'POST']>
+15260-DEBUG-send_request_body.complete
+15260-DEBUG-receive_response_headers.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Sat, 20 Apr 2024 20:02:02 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'1313'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+15260-INFO-HTTP Request: POST https://api.telegram.org/bot7033123838:AAGIVMfG5C2hIHUB0I2S4sNCZDZx4JOH9SM/getUpdates "HTTP/1.1 200 OK"
+15260-DEBUG-receive_response_body.started request=<Request [b'POST']>
+15260-DEBUG-receive_response_body.complete
+15260-DEBUG-response_closed.started
+15260-DEBUG-response_closed.complete
+15260-DEBUG-Getting updates: [252073305]
+15260-DEBUG-(Update(callback_query=CallbackQuery(chat_instance='5752383836567190392', data='cbcal_0_s_y_2024_4_20', from_user=User(first_name='Андрей', id=468997622, is_bot=False, language_code='en', username='A_feelsgood'), id='2014329452016663332', message=Message(channel_chat_created=False, chat=Chat(first_name='Андрей', id=468997622, type=<ChatType.PRIVATE>, username='A_feelsgood'), date=datetime.datetime(2024, 4, 20, 19, 57, 34, tzinfo=datetime.timezone.utc), delete_chat_photo=False, from_user=User(first_name='ikigai', id=7033123838, is_bot=True, username='Ikigai_Coworking_Bot'), group_chat_created=False, message_id=724, reply_markup=InlineKeyboardMarkup(inline_keyboard=((InlineKeyboardButton(callback_data='cbcal_0_s_y_2023_4_20', text='2023'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2024_4_20', text='2024')), (InlineKeyboardButton(callback_data='cbcal_0_s_y_2025_4_20', text='2025'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2026_4_20', text='2026')), (InlineKeyboardButton(callback_data='cbcal_0_g_y_2020_4_20', text='<<'), InlineKeyboardButton(callback_data='cbcal_0_n', text=' '), InlineKeyboardButton(callback_data='cbcal_0_g_y_2028_4_20', text='>>')))), supergroup_chat_created=False, text='Выберете день, в который вы хотите забронировать рабочее место.')), update_id=252073305),)
+15260-DEBUG-Exiting: get_updates
+15260-DEBUG-Processing update Update(callback_query=CallbackQuery(chat_instance='5752383836567190392', data='cbcal_0_s_y_2024_4_20', from_user=User(first_name='Андрей', id=468997622, is_bot=False, language_code='en', username='A_feelsgood'), id='2014329452016663332', message=Message(channel_chat_created=False, chat=Chat(first_name='Андрей', id=468997622, type=<ChatType.PRIVATE>, username='A_feelsgood'), date=datetime.datetime(2024, 4, 20, 19, 57, 34, tzinfo=datetime.timezone.utc), delete_chat_photo=False, from_user=User(first_name='ikigai', id=7033123838, is_bot=True, username='Ikigai_Coworking_Bot'), group_chat_created=False, message_id=724, reply_markup=InlineKeyboardMarkup(inline_keyboard=((InlineKeyboardButton(callback_data='cbcal_0_s_y_2023_4_20', text='2023'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2024_4_20', text='2024')), (InlineKeyboardButton(callback_data='cbcal_0_s_y_2025_4_20', text='2025'), InlineKeyboardButton(callback_data='cbcal_0_s_y_2026_4_20', text='2026')), (InlineKeyboardButton(callback_data='cbcal_0_g_y_2020_4_20', text='<<'), InlineKeyboardButton(callback_data='cbcal_0_n', text=' '), InlineKeyboardButton(callback_data='cbcal_0_g_y_2028_4_20', text='>>')))), supergroup_chat_created=False, text='Выберете день, в который вы хотите забронировать рабочее место.')), update_id=252073305)
+15260-DEBUG-Selecting conversation (468997622, 468997622) with state None
