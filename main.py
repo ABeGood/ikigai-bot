@@ -91,6 +91,7 @@ if __name__ == '__main__':
         global new_reservation
         result, key, step = DetailedTelegramCalendar().process(call.data)
         if not result and key:
+            key = states.format_calendar(key, new_reservation=new_reservation)
             bot.edit_message_text(f"Select {LSTEP[step]}",
                                 call.message.chat.id,
                                 call.message.message_id,
@@ -99,14 +100,21 @@ if __name__ == '__main__':
             bot.set_state(user_id=call.from_user.id, state=BotStates.state_reservation_menu_time)
             day = pd.to_datetime(result)
             new_reservation.day = day
-            states.show_time(bot, call)
+            states.show_time(bot, call, new_reservation)
+
+
+    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_date)
+    def callback_query(call):
+        if call.data == 'cb_back':
+            bot.set_state(call.from_user.id, BotStates.state_reservation_menu_hours)
+            states.show_hours(bot, call)
 
         
     @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_time)
     def callback_query(call):
         if call.data == 'cb_back':
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
-            states.show_date(bot, call)
+            states.show_date(bot, call, new_reservation)
         else:
             time = call.data
             new_reservation.time_from = pd.to_datetime(time)

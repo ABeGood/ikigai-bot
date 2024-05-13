@@ -61,8 +61,7 @@ def show_hours(bot, callback):
     bot.send_message(callback.message.chat.id, 'How much time do you need?', reply_markup=markup)
 
 
-def show_date(bot, callback, new_reservation):
-    calendar, step = WMonthTelegramCalendar().build()
+def format_calendar(calendar, new_reservation):
     # json_calendar = json.loads(calendar)['inline_keyboard']
     json_calendar = json.loads(calendar)
     calendar = InlineKeyboardMarkup(InlineKeyboardMarkup.de_json(json_calendar).keyboard)
@@ -71,42 +70,47 @@ def show_date(bot, callback, new_reservation):
     # available_days = reservations_table.find_available_timeslots(new_reservation)
     available_days = reservations_table.find_time_gaps(n_of_hours=new_reservation.period)
 
-    available_days_starts = []
-
-    for available_day in available_days:
-        available_days_starts.append(available_day[0].date())
+    date_format = '%Y_%m_%d'
+    available_dates = list(available_days.keys())
 
     for week in calendar.keyboard:
         for day in week:
-            parts = day.callback_data.split('_')
-
-            # Extract the date part (last 3 elements)
-            date_str = '_'.join(parts[-3:])
-
-            # Define the date format
-            date_format = '%Y_%m_%d'
-
-            # Parse the date string to a datetime object
-            try:
-                day_datetime = dt.strptime(date_str, date_format)
-                day_datetime = pd.to_datetime(day_datetime, format=date_format)
-
-                if day_datetime.date() not in available_days_starts:
+            if day.callback_data.startswith('cbcal_0_s_d_'):
+                parts = day.callback_data.split('_')
+                date_str = '_'.join(parts[-3:])
+           
+                day_date = dt.strptime(date_str, date_format).date().strftime(format = '%Y-%m-%d')
+                if day_date not in available_dates:
                     day.text = '✖️'
                     day.callback_data = 'cb_no_timeslots'
-            except:
-                continue
+                # else:
+                #     day.callback_data = json.dumps([timeslot.strftime('%H-%M') for timeslot in available_days[day_date]])
 
+    return calendar
+
+def show_date(bot, callback, new_reservation):
+    calendar, step = WMonthTelegramCalendar().build()
+    calendar = format_calendar(calendar, new_reservation)
     bot.send_message(callback.message.chat.id, 'Выберете подходящий для вас день:', reply_markup=calendar)
 
 
-def show_time(bot, callback):
+def show_time(bot, callback, new_reservation):
     markup = InlineKeyboardMarkup()
-    markup.row_width = 2
-    markup.add( InlineKeyboardButton('10:00', callback_data='10:00'),
-                InlineKeyboardButton('10:30', callback_data='10:30'),
-                InlineKeyboardButton('14:30', callback_data='14:30'))
+    date = callback.data
 
+    parts = callback.data.split('_')
+    date_str = '_'.join(parts[-3:])
+    date_str = date_str.replace('_', '-')
+    date = dt.strptime(date_str, '%Y-%m-%d')
+    date_str = dt.strftime(date, format='%Y-%m-%d')
+    
+    # date = date.strftime('%Y-%m-%d')
+    timeslots = reservations_table.find_time_gaps(n_of_hours=new_reservation.period)[date_str]
+
+    for timeslot in timeslots:
+        markup.add(InlineKeyboardButton(dt.strftime(timeslot, '%H:%M'), callback_data=dt.strftime(timeslot, '%H:%M')))
+
+    markup.add(InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),)
     bot.send_message(callback.message.chat.id, 'Выбетере подходящее для вас время', reply_markup=markup)
 
 

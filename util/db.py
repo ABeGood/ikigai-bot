@@ -53,17 +53,28 @@ class ReservationTable():
         
 
 
-    def get_days(self, to_date: datetime):
-        current_datetime = datetime.now()
-        to_date = (current_datetime.replace(day=1) + timedelta(days=32)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    def get_days(self, to_date: datetime, timeslot_size_h):
         days = []
+        mins_buffer = 10
+        current_datetime = datetime.now()
+        
         end_of_current_day = current_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        if current_datetime + timedelta(hours=timeslot_size_h, minutes=mins_buffer) <= end_of_current_day:
+            if (current_datetime + timedelta(minutes=mins_buffer)).minute < 30:
+                next_available_timeslot_start = (current_datetime.replace(minute=30, second=0, microsecond=000000))
+            else:
+                next_available_timeslot_start = (current_datetime.replace(hour=current_datetime.hour+1, minute=0, second=0, microsecond=000000))
+
+            end_of_current_day = current_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+            days.append([next_available_timeslot_start, end_of_current_day])
+
+
         start_of_the_next_day = current_datetime.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
-        days.append([current_datetime, end_of_current_day])
         date_range_with_time = pd.date_range(start_of_the_next_day, end=to_date, freq='D')
 
         for day in date_range_with_time:
-            # Generate time intervals from 06:00 to 23:59 for the current day
+            # Generate time intervals from 06:00 to 23:59 for the full days
             days.append([day, day.replace(hour=23, minute=59, second=59)])
             
         return days
@@ -71,6 +82,7 @@ class ReservationTable():
 
     def find_time_gaps(self, n_of_hours: int):  # AG: Now returns only days with no reservations
 
+        n_of_hours = int(n_of_hours)
         current_datetime = datetime.now()
         to_date = (current_datetime.replace(day=1) + timedelta(days=32)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -85,11 +97,11 @@ class ReservationTable():
 
 
         # Initialize list to store time gaps
-        time_gaps = []
+        timeslots = {}
         time_step = 30 # min
 
         # Iterate through each day within the specified range
-        for day in self.get_days(to_date):
+        for day in self.get_days(to_date, timeslot_size_h=n_of_hours):
             # Convert day to string format
             day_start = day[0]
             day_end = day[1]
@@ -99,35 +111,57 @@ class ReservationTable():
 
             # Filter reservations for the current day
             reservations_on_day = reservations_table[reservations_table['Day'] == day_str]
+            reservations_on_day.sort_values(by='From', inplace=True)
             print(f'Reservations at this day: {len(reservations_on_day)}')
 
+            gap_start_time = day_start
+            gap_end_time = gap_start_time + timedelta(hours=n_of_hours)
+
             if len(reservations_on_day) == 0:
-                # time_gaps = time_gaps +  pd.date_range(day_start, end=day_end, freq=f'{time_step}min')
-                time_gaps.append(day)
-            else:
-                pass
-                
-                # Sort reservations by start time
-                # reservations_on_day.sort_values(by='From', inplace=True)
+                while gap_end_time <= day_end:
+                    timeslots.setdefault(day_str,[]).append(gap_start_time)
+                    gap_start_time = (gap_start_time + timedelta(minutes=time_step))  # .replace(second=0, microsecond=0)
+                    gap_end_time = gap_start_time + timedelta(hours=n_of_hours)
+            elif len(reservations_on_day) >= 1:
+                for _, reservation in reservations_on_day.iterrows():
+                    next_reservation_start = reservation['From']
+                    next_reservation_end = reservation['To']
+                    # new_reservation = [gap_start_time, gap_end_time]
 
-                # # Initialize gap start time to the beginning of the day
-                # gap_start_time = day_start
+                    while gap_end_time <= next_reservation_start:
+                        timeslots.setdefault(day_str,[]).append(gap_start_time)
+                        gap_start_time = (gap_start_time + timedelta(minutes=time_step))  # .replace(second=0, microsecond=0)
+                        gap_end_time = gap_start_time + timedelta(hours=n_of_hours)
 
-                # # while gap_start_time < day_end:
-                    
+                    gap_start_time = next_reservation_end
+                    gap_end_time = gap_start_time + timedelta(hours=n_of_hours)
 
-                # # Iterate through reservations to find gaps
-                # for _, reservation in reservations_on_day.iterrows():
-                #     # If there is a gap between the previous reservation and the current one
-                #     if reservation['From'] > gap_start_time:
-                #         n_of_free_hours = reservation['From'] - gap_start_time
+                    # if not find_overlap(new_reservation, existing_reservation):
+                    #     timeslots[day_str].append((gap_start_time, gap_end_time))
+                    #     gap_start_time = gap_start_time + timedelta(minutes=time_step).replace(second=0, microsecond=0)
+                    #     gap_end_time = gap_start_time + timedelta(hours=n_of_hours)
+                    # else:
+                    #     gap_start_time = gap_start_time + timedelta(minutes=time_step).replace(second=0, microsecond=0)
+                    #     gap_end_time = gap_start_time + timedelta(hours=n_of_hours)
+                else:
+                    while gap_end_time <= day_end:
+                        timeslots.setdefault(day_str,[]).append(gap_start_time)
+                        gap_start_time = (gap_start_time + timedelta(minutes=time_step))  # .replace(second=0, microsecond=0)
+                        gap_end_time = gap_start_time + timedelta(hours=n_of_hours)
+
+
+            # for _, reservation in reservations_on_day.iterrows():
+            #         # If there is a gap between the previous reservation and the current one
+            #         if reservation['From'] > gap_start_time:
+            #             n_of_free_hours = reservation['From'] - gap_start_time
                         
-                #         # if int(n_of_free_hours.hours()) >= int(n_of_hours):
-                #         while int(n_of_free_hours.hours()) >= int(n_of_hours):
-                #             time_gaps.append(gap_start_time)
-                #             gap_start_time = gap_start_time + timedelta(minutes=time_step).replace(second=0, microsecond=0)
-                #         else:
-                #             gap_start_time = reservation['To']
-                #     # Update gap_start_time to the end of the current reservation
-        return time_gaps
+            #             # if int(n_of_free_hours.hours()) >= int(n_of_hours):
+            #             while int(n_of_free_hours.hours()) >= int(n_of_hours):
+            #                 time_gaps.append(gap_start_time)
+            #                 gap_start_time = gap_start_time + timedelta(minutes=time_step).replace(second=0, microsecond=0)
+            #             else:
+            #                 gap_start_time = reservation['To']
+            #         # Update gap_start_time to the end of the current reservation
+
+        return timeslots
 
