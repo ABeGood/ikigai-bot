@@ -75,6 +75,21 @@ if __name__ == '__main__':
         if call.data == 'cb_back':
             bot.set_state(call.from_user.id, BotStates.state_main_menu)
             states.show_main_menu(bot, call.message)
+        else:
+            bot.set_state(call.from_user.id, BotStates.state_my_reservation)
+            states.show_my_reservation(bot, call, reservations_table=states.reservations_table)
+
+
+    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_my_reservation)
+    def callback_query(call):
+        if call.data == 'cb_back':
+            bot.set_state(call.from_user.id, BotStates.state_my_reservation_list)
+            states.show_my_reservations(bot, call.message)
+        elif call.data.startswith('delete_'):
+            order_id = call.data.split('_')[1]
+            states.reservations_table.delete_reservation(order_id)
+            bot.set_state(call.from_user.id, BotStates.state_my_reservation)
+            states.show_my_reservation(bot, call, reservations_table=states.reservations_table)
 
                 
     @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_type)

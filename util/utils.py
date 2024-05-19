@@ -4,18 +4,6 @@ import pandas as pd
 import config
 
 
-# def find_overlap(new_reservation, existing_reservation):
-#     r1 = pd.date_range(new_reservation[0], end=new_reservation[1])
-#     r2 = pd.date_range(existing_reservation[0], end=existing_reservation[1])
-#     # r2 = Range(start=datetime(2012, 3, 20), end=datetime(2012, 9, 15))
-    
-#     latest_start = max(r1.start, r2.start)
-#     earliest_end = min(r1.end, r2.end)
-#     delta = (earliest_end - latest_start).minutes
-#     overlap = max(0, delta)
-#     return overlap
-
-
 def find_closest_slot_start(mins_buffer):
     current_datetime = datetime.now()
     if 0 <= current_datetime.minute <= 30-mins_buffer:  # xx:00 - xx:20
@@ -72,7 +60,7 @@ def find_available_days(new_reservation: Reservation, reservation_table: pd.Data
 
         # Filter reservations for the current day
         reservations_on_day = reservation_table[reservation_table['Day'] == day_str]
-        print(f'Reservations at this day: {len(reservations_on_day)}')
+        print(f'Reservations on {day_str}: {len(reservations_on_day)}')
         if len(reservations_on_day) == 0:
             available_days.append(day_start)
         else:
@@ -114,7 +102,7 @@ def find_timeslots(new_reservation: Reservation, reservation_table: pd.DataFrame
     reservations_on_day = reservation_table[reservation_table['Day'] == day_str]
     reservations_on_day = reservations_on_day[reservations_on_day['Type'] == new_reservation.type]
     reservations_on_day.sort_values(by='From', inplace=True)
-    print(f'Reservations at this day: {len(reservations_on_day)}')
+    print(f'Reservations on {day_str}: {len(reservations_on_day)}')
 
     gap_start_time = day_start
     gap_end_time = gap_start_time + timedelta(hours=new_reservation.period)

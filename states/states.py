@@ -23,7 +23,6 @@ class BotStates(StatesGroup):
         state_reservation_menu_type = State()
         state_reservation_menu_hours = State()
         state_reservation_menu_date = State()
-        state_reservation_menu_time = State()
         state_reservation_menu_place = State()
         state_reservation_menu_recap = State()
 
@@ -184,3 +183,30 @@ def show_my_reservations(bot, callback):
     markup.add(InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),)
 
     bot.send_message(callback.message.chat.id, 'Ваши резервации:', reply_markup=markup)
+
+
+def show_my_reservation(bot, callback, reservations_table: db.ReservationTable):
+    reservation_id = callback.data
+    reservation = reservations_table.table.loc[reservations_table.table['OrderId'] == reservation_id]
+
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 1
+    if reservation['Payed'] == False:
+        markup.add(InlineKeyboardButton('Оплатить', callback_data='pay_now'),)
+
+    markup.add(
+        InlineKeyboardButton('Отменить резервацию', callback_data=f'delete_{reservation_id}'),
+        InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),
+        )
+
+    if not reservation.empty:
+        reservation_info = f"""
+        Reservation ID: {reservation_id}
+        Date: {reservation['Day'].values[0].strftime('%Y-%m-%d')}
+        Time: {reservation['From'].values[0].strftime('%H:%M')} - {reservation['To'].values[0].strftime('%H:%M')}
+        Type: {reservation['Type'].values[0]}
+        Place: {reservation['Place'].values[0]}
+        """
+        bot.send_message(callback.message.chat.id, reservation_info, reply_markup=markup)
+    else:
+        bot.send_message(callback.message.chat.id, "Резервация не найдена...")

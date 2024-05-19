@@ -25,26 +25,31 @@ class ReservationTable:
 
     def save_reservation_to_table(self, new_reservation: Reservation):
         new_reservation_df = pd.DataFrame(
-                {
-                    'OrderId': [new_reservation.orderid],
-                    'TelegramId': [new_reservation.telegramId],
-                    'Name': [new_reservation.name],
-                    'Type': [new_reservation.type],
-                    'Place': [new_reservation.place],
-                    'Day': [new_reservation.day],
-                    'From': [new_reservation.time_from],
-                    'To': [new_reservation.time_to],
-                    'Period': [new_reservation.period],
-                    'Payed': [False]
-                }
-            )
-        
+            {
+                'OrderId': [new_reservation.orderid],
+                'TelegramId': [new_reservation.telegramId],
+                'Name': [new_reservation.name],
+                'Type': [new_reservation.type],
+                'Place': [new_reservation.place],
+                'Day': [new_reservation.day],
+                'From': [new_reservation.time_from],
+                'To': [new_reservation.time_to],
+                'Period': [new_reservation.period],
+                'Payed': [False]
+            }
+        )
+
         self.table = pd.concat([self.table, new_reservation_df])
+        self.table.dropna(inplace=True)  # Remove empty rows
         try:
             gs.save_df_to_table(self.table)
             return True
         except Exception as e:
             print(e.with_traceback)
             return False
+        
+    def delete_reservation(self, reservation_id: str):
+        self.table = self.table[self.table['OrderId'] != reservation_id]
+        gs.save_df_to_table(self.table)
         
 
