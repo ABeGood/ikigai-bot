@@ -19,8 +19,9 @@ import states.states as states
 # States storage
 from telebot.storage import StateMemoryStorage
 from telebot.handler_backends import State, StatesGroup
-from util import db
+from util import db, utils
 from classes.classes import Reservation
+import ast
 
 
 logging.basicConfig(
@@ -33,7 +34,7 @@ logging.basicConfig(
 
 if __name__ == '__main__':
     state_storage = StateMemoryStorage() # you can init here another storage
-    new_reservation = None
+    new_reservation : Reservation
     
 
     bot = telebot.TeleBot(config.token,
@@ -48,27 +49,40 @@ if __name__ == '__main__':
     @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_main_menu)
     def callback_query(call):
         global new_reservation
-
         if call.data == "cb_new_reservation":
-            states.reservations_table = states.reservations_table.read_table_to_df()
-            # TODO: dropna()
-            new_reservation = Reservation(orderId=None, telegramId=call.from_user.id, name=call.from_user.full_name)
+            new_reservation = Reservation(telegramId=call.from_user.id, name=call.from_user.full_name)
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
             states.show_reservation_type(bot, call)
-        elif call.data == 'cb_start_my_reservations':
-            # my reservations
-            pass
+        elif call.data == 'cb_my_reservations':
+            bot.set_state(call.from_user.id, BotStates.state_my_reservation_list)
+            states.show_my_reservations(bot, call)
         elif call.data == "cb_info":
-            bot.set_state(call.from_user.id, BotStates.info)
+            bot.set_state(call.from_user.id, BotStates.state_info)
+            states.show_info(bot, call)
 
-                
-    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_type)
+
+    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_info)
     def callback_query(call):
         if call.data == 'cb_back':
             bot.set_state(call.from_user.id, BotStates.state_main_menu)
             states.show_main_menu(bot, call.message)
+
+    
+    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_my_reservation_list)
+    def callback_query(call):
+        if call.data == 'cb_back':
+            bot.set_state(call.from_user.id, BotStates.state_main_menu)
+            states.show_main_menu(bot, call.message)
+
+                
+    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_type)
+    def callback_query(call):
+        global new_reservation
+        if call.data == 'cb_back':
+            bot.set_state(call.from_user.id, BotStates.state_main_menu)
+            states.show_main_menu(bot, call.message)
         else:
-            spec = call.data
+            spec = call.data[0]
             new_reservation.type = spec
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_hours)
             states.show_hours(bot, call)
@@ -76,11 +90,12 @@ if __name__ == '__main__':
 
     @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_hours)
     def callback_query(call):
+        global new_reservation
         if call.data == 'cb_back':
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
             states.show_reservation_type(bot, call)
         else:
-            hours = call.data
+            hours = int(call.data)
             new_reservation.period = hours
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
             states.show_date(bot, call, new_reservation)
@@ -112,22 +127,54 @@ if __name__ == '__main__':
         
     @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_time)
     def callback_query(call):
+        global new_reservation
         if call.data == 'cb_back':
+            new_reservation.day = ''  # TODO
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
             states.show_date(bot, call, new_reservation)
         else:
-            time = call.data
-            new_reservation.time_from = pd.to_datetime(time)
+            callback_data = call.data.split('_p')
+            time = pd.to_datetime(callback_data[0])
+            available_places = ast.literal_eval(callback_data[1])
+            new_reservation.available_places = available_places
+            new_reservation.time_from = dt.datetime.combine(new_reservation.day.date(), time.time())
+            new_reservation.time_to = new_reservation.time_from + dt.timedelta(hours=new_reservation.period)
+
+            bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
+            states.show_place(bot, call, new_reservation=new_reservation)
+
+
+    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_place)
+    def callback_query(call):
+        global new_reservation
+        if call.data == 'cb_back':
+            bot.set_state(call.from_user.id, BotStates.state_reservation_menu_time)
+            states.show_time(bot, call, new_reservation)
+        else:
+            place = int(call.data.split('_')[1])
+            new_reservation.place = place
+
+            bot.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
+            states.show_recap(bot, call, new_reservation=new_reservation)
+
+    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_recap)
+    def callback_query(call):
+        global new_reservation
+        if call.data == 'cb_back':
+            bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
+            states.show_place(bot, call, new_reservation)
+        else:
+            new_reservation.orderid = utils.generate_order_id(new_reservation)
             save_result_ok = states.reservations_table.save_reservation_to_table(new_reservation=new_reservation)
             if save_result_ok:
-                bot.set_state(call.from_user.id, BotStates.state_reservation_done)
-                states.show_reservation_done(bot, call)
+                bot.send_message(call.message.chat.id, '🎉 Ваша резервация подтверждена! \nДо встречи.')
+                bot.set_state(call.from_user.id, BotStates.state_start)
 
 
-    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_done)
-    def callback_query(call):
-        bot.set_state(call.from_user.id, BotStates.state_start)
-        states.show_start(bot, call)
+    # @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_done)
+    # def callback_query(call):
+    #     bot.set_state(call.from_user.id, BotStates.state_start)
+    #     states.show_start(bot, call)
 
 
     bot.add_custom_filter(custom_filters.StateFilter(bot))

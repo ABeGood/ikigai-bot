@@ -1,21 +1,21 @@
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-import pandas as pd
-from util import db
+from datetime import datetime
 
 
 class Reservation():
-    orderid = None
-    telegramId = None
-    name = None
-    type = None
-    period = None
-    day = None
-    time_from = None
-    time_to = None
+    orderid : str
+    telegramId : str
+    name : str
+    type : str
+    place : int
+    period : int
+    day : datetime
+    time_from : datetime
+    time_to : datetime
+    available_places : list[int]
 
-    def __init__(self, orderId, telegramId, name) -> None:
-        self.orderid = orderId
+    def __init__(self, telegramId:str, name:str) -> None:
         self.telegramId = telegramId
         self.name = name
+
 
     
