@@ -50,6 +50,12 @@ class ReservationTable:
         
     def delete_reservation(self, reservation_id: str):
         self.table = self.table[self.table['OrderId'] != reservation_id]
-        gs.save_df_to_table(self.table)
+        self.table.dropna(inplace=True)  # Remove empty rows
+        try:
+            gs.save_df_to_table(self.table)
+            return True
+        except Exception as e:
+            print(e.with_traceback)
+            return False
         
 

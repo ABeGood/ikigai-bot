@@ -29,6 +29,7 @@ def read_table_to_df():
 
 def save_df_to_table(df):
     global reservations_table
+    reservations_table.clear()
     df = df.fillna('')
     df = df.astype(str)
     columns = df.columns.values.tolist()

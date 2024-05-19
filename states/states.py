@@ -192,7 +192,7 @@ def show_my_reservation(bot, callback, reservations_table: db.ReservationTable):
 
     markup = InlineKeyboardMarkup()
     markup.row_width = 1
-    if reservation['Payed'] == False:
+    if reservation['Payed'].values[0] == 'False':
         markup.add(InlineKeyboardButton('Оплатить', callback_data='pay_now'),)
 
     markup.add(
@@ -202,12 +202,10 @@ def show_my_reservation(bot, callback, reservations_table: db.ReservationTable):
 
     if not reservation.empty:
         reservation_info = f"""
-        Reservation ID: {reservation_id}
-        Date: {reservation['Day'].values[0].strftime('%Y-%m-%d')}
-        Time: {reservation['From'].values[0].strftime('%H:%M')} - {reservation['To'].values[0].strftime('%H:%M')}
-        Type: {reservation['Type'].values[0]}
-        Place: {reservation['Place'].values[0]}
-        """
+День: {reservation['Day'].astype('datetime64[ns]').values[0].astype('datetime64[D]').tolist().strftime('%Y-%m-%d')}\n\
+Время: {reservation['From'].astype('datetime64[ns]').values[0].astype('datetime64[m]').tolist().strftime('%H:%M')} - {reservation['To'].astype('datetime64[ns]').values[0].astype('datetime64[m]').tolist().strftime('%H:%M')}\n\
+Место: {reservation['Place'].values[0]}
+"""
         bot.send_message(callback.message.chat.id, reservation_info, reply_markup=markup)
     else:
         bot.send_message(callback.message.chat.id, "Резервация не найдена...")

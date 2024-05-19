@@ -43,7 +43,7 @@ def generate_days_intervals(to_date: datetime, timeslot_size_h: int) -> list[dat
 def find_available_days(new_reservation: Reservation, reservation_table: pd.DataFrame, to_date = None) -> list[datetime]:  # AG: Now returns only days with no reservations
     current_datetime = datetime.now()
     if to_date is None:
-        to_date = (current_datetime.replace(day=1) + timedelta(days=32)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        to_date = (current_datetime.replace(day=1) + timedelta(days=150)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     days_to_check = generate_days_intervals(to_date, timeslot_size_h=new_reservation.period)
 
 
