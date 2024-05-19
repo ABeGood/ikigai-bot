@@ -4,8 +4,8 @@
 # State filter: https://github.com/eternnoir/pyTelegramBotAPI/blob/master/examples/custom_states.py#L103
 
 import logging
-import config, keys
 import os
+from dotenv import load_dotenv
 import pandas as pd
 import telebot # telebot
 import datetime as dt
@@ -24,6 +24,8 @@ from util import db, utils
 from classes.classes import Reservation
 import ast
 
+load_dotenv()
+
 
 logging.basicConfig(
     level=logging.DEBUG, 
@@ -37,8 +39,8 @@ if __name__ == '__main__':
     state_storage = StateMemoryStorage() # you can init here another storage
     new_reservation : Reservation
     
-    bot_token = os.environ.get('BOT_TOKEN', keys.token)
-    bot = telebot.TeleBot(keys.token, state_storage=state_storage)
+    bot_token : str | None = os.environ.get('BOT_TOKEN')
+    bot = telebot.TeleBot(bot_token, state_storage=state_storage)
 
     @bot.message_handler(commands=['start'])
     def start(message):

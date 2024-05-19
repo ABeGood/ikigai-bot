@@ -1,3 +1,4 @@
 keys.py
 ikigai-db-credentials.json
 /__pycache__/*
+**/*.pyc
