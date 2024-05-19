@@ -23,6 +23,7 @@ class BotStates(StatesGroup):
         state_reservation_menu_type = State()
         state_reservation_menu_hours = State()
         state_reservation_menu_date = State()
+        state_reservation_menu_time = State()
         state_reservation_menu_place = State()
         state_reservation_menu_recap = State()
 
