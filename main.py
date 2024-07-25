@@ -26,7 +26,7 @@ from classes.classes import Reservation
 import ast
 
 from config import *
-from keys import token
+# from keys import token
 from texts import *
 
 load_dotenv()
