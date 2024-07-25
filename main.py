@@ -44,8 +44,8 @@ if __name__ == '__main__':
     state_storage = StateMemoryStorage() # you can init here another storage
     new_reservation : Reservation
     
-    bot_token : str | None = os.environ.get('BOT_TOKEN')
-    bot = telebot.TeleBot(token=token, state_storage=state_storage)
+    bot_token : str = os.environ.get('BOT_TOKEN')
+    bot = telebot.TeleBot(token=bot_token, state_storage=state_storage)
 
     @bot.message_handler(commands=['start'])
     def start(message):
