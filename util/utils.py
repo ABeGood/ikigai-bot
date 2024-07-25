@@ -17,20 +17,27 @@ def find_closest_slot_start(mins_buffer):
 
 def generate_days_intervals(to_date: datetime, timeslot_size_h: int) -> list[datetime]:
     days: list[datetime] = []
-    mins_buffer = 10
 
     current_datetime = datetime.now()   
-    end_of_current_day = current_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+    end_of_current_day = current_datetime.replace(hour=config.workday_end.hour-1, minute=59, second=59, microsecond=999)
 
-    if current_datetime < current_datetime.replace(hour=6, minute=0, second=0, microsecond=0):
-        days.append(current_datetime.replace(hour=6, minute=0, second=0, microsecond=0))
+    if current_datetime.time() < config.workday_start:
+        days.append(current_datetime.replace(hour=config.workday_end.hour,
+                                            minute=config.workday_end.minute,
+                                            second=config.workday_end.second,
+                                            microsecond=config.workday_end.microsecond))
 
-    elif current_datetime + timedelta(hours=timeslot_size_h, minutes=mins_buffer) <= end_of_current_day:
-        next_available_timeslot_start = find_closest_slot_start(mins_buffer=mins_buffer)
+    elif current_datetime + timedelta(hours=timeslot_size_h, minutes=config.time_buffer_mins) <= end_of_current_day:
+        next_available_timeslot_start = find_closest_slot_start(mins_buffer=config.time_buffer_mins)
         days.append(pd.to_datetime(next_available_timeslot_start))
 
 
-    start_of_the_next_day = current_datetime.replace(hour=6, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    start_of_the_next_day = current_datetime.replace(hour=config.workday_start.hour, 
+                                                    minute=config.workday_start.minute, 
+                                                    second=config.workday_start.second, 
+                                                    microsecond=config.workday_start.microsecond
+                                                    ) + timedelta(days=1)
+    
     date_range_with_time = pd.date_range(start_of_the_next_day, end=to_date, freq='D')
 
     for day in date_range_with_time:
@@ -42,8 +49,10 @@ def generate_days_intervals(to_date: datetime, timeslot_size_h: int) -> list[dat
 
 def find_available_days(new_reservation: Reservation, reservation_table: pd.DataFrame, to_date = None) -> list[datetime]:  # AG: Now returns only days with no reservations
     current_datetime = datetime.now()
+
+    # Some kind of lookforward; TODO: refactor
     if to_date is None:
-        to_date = (current_datetime.replace(day=1) + timedelta(days=150)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        to_date = (current_datetime.replace(day=1) + timedelta(days=config.days_lookforward)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     days_to_check = generate_days_intervals(to_date, timeslot_size_h=new_reservation.period)
 
 
@@ -64,19 +73,8 @@ def find_available_days(new_reservation: Reservation, reservation_table: pd.Data
         if len(reservations_on_day) == 0:
             available_days.append(day_start)
         else:
-            possible_timeslots = pd.DataFrame()
-            possible_timeslots['From'] = pd.Series(pd.date_range(day_start, day_end, freq=f'{new_reservation.period}h'))
-            possible_timeslots['To'] = possible_timeslots['From'] + pd.Timedelta(hours=new_reservation.period)
-
-            available_timeslots = (
-                pd.merge_asof(possible_timeslots, reservations_on_day.add_suffix('_existing'), left_on='From', right_on='From_existing')
-                .loc[lambda d: ~((d['From_existing'].ge(d['From_existing']) & d['From_existing'].lt(d['To']))
-                                |(d['To_existing'].le(d['To']) & d['To_existing'].gt(d['From']))
-                                ),
-                        ['From', 'To']]
-                )
-            
-            if not available_timeslots.empty:
+            available_timeslots = find_timeslots(new_reservation=new_reservation, reservation_table=reservation_table, on_date=day_start)
+            if len(available_timeslots) > 0:
                 available_days.append(day_start)
 
     return available_days
@@ -84,25 +82,29 @@ def find_available_days(new_reservation: Reservation, reservation_table: pd.Data
 
 def find_timeslots(new_reservation: Reservation, reservation_table: pd.DataFrame, on_date : datetime) -> dict[str, list[int]]:  # AG: Now returns only days with no reservations
     timeslots: dict[str, list[int]] = {}
-    time_step = 30 # min
-    time_buffer_mins = 25
     day_start : datetime
-    day_end = on_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+    day_end = on_date.replace(hour=config.workday_end.hour, 
+                              minute=config.workday_end.minute, 
+                              second=config.workday_end.second, 
+                              microsecond=config.workday_end.microsecond)
+    
+    # day_str = day_start.strftime('%Y-%m-%d')
     current_datetime = datetime.now()  
 
     if on_date.date() == current_datetime.now().date():
-        day_start = find_closest_slot_start(mins_buffer=time_buffer_mins)
+        day_start = find_closest_slot_start(mins_buffer=config.time_buffer_mins)
     else:
-        day_start = on_date.replace(hour=6, minute=0, second=0, microsecond=0)
-
-
-    day_str = day_start.strftime('%Y-%m-%d')
+        day_start = on_date.replace(hour=config.workday_start.hour, 
+                                    minute=config.workday_start.minute, 
+                                    second=config.workday_start.second, 
+                                    microsecond=config.workday_start.microsecond
+                                    )
 
     # Filter reservations for the current day
-    reservations_on_day = reservation_table[reservation_table['Day'] == day_str]
+    reservations_on_day = reservation_table[reservation_table['Day'] == day_start.strftime('%Y-%m-%d')]
     reservations_on_day = reservations_on_day[reservations_on_day['Type'] == new_reservation.type]
     reservations_on_day.sort_values(by='From', inplace=True)
-    print(f'Reservations on {day_str}: {len(reservations_on_day)}')
+    print(f'Reservations on {day_start.strftime("%Y-%m-%d")}: {len(reservations_on_day)}')
 
     gap_start_time = day_start
     gap_end_time = gap_start_time + timedelta(hours=new_reservation.period)
@@ -110,7 +112,7 @@ def find_timeslots(new_reservation: Reservation, reservation_table: pd.DataFrame
     if len(reservations_on_day) == 0:
         while gap_end_time <= day_end:
             timeslots[gap_start_time.strftime('%H:%M')] = list(config.places[new_reservation.type])
-            gap_start_time = (gap_start_time + timedelta(minutes=time_step))
+            gap_start_time = (gap_start_time + timedelta(minutes=config.time_step))
             gap_end_time = gap_start_time + timedelta(hours=new_reservation.period)
     elif len(reservations_on_day) >= 1:
         while gap_end_time <= day_end:
@@ -123,19 +125,44 @@ def find_timeslots(new_reservation: Reservation, reservation_table: pd.DataFrame
             else:
                 timeslots[gap_start_time.strftime('%H:%M')] = list(config.places[new_reservation.type])
             
-            gap_start_time = (gap_start_time + timedelta(minutes=time_step))
+            gap_start_time = (gap_start_time + timedelta(minutes=config.time_step))
             gap_end_time = gap_start_time + timedelta(hours=new_reservation.period)
 
     return timeslots
 
 
 def find_overlaps(reservations: pd.DataFrame, time_gap: tuple[datetime, ...]) -> pd.DataFrame:
-    mask =  ((reservations['From'] <= time_gap[0]) & (time_gap[0] <= reservations['To'])) | \
-            ((reservations['From'] <= time_gap[1]) & (time_gap[1] <= reservations['To']))   | \
+    mask =  ((reservations['From'] <= time_gap[0]) & (time_gap[0] < reservations['To'])) | \
+            ((reservations['From'] <= time_gap[1]) & (time_gap[1] < reservations['To']))   | \
             ((time_gap[0] <= reservations['From']) & (reservations['From'] <= time_gap[1]))   | \
-            ((time_gap[0] <= reservations['To']) & (reservations['To'] <= time_gap[1]))
+            ((time_gap[0] < reservations['To']) & (reservations['To'] < time_gap[1]))
     
     return reservations.loc[mask]
 
 def generate_order_id(r: Reservation):
     return f'{r.day.strftime("%Y-%m-%d")}_{r.period}h_{r.time_from.strftime("%H-%M")}_p{r.place}_{r.telegramId}'
+
+
+# WTF? Why here?
+def format_reservation_recap(reservation: Reservation):
+    return f'''*Ваша резервация:*
+*Дата:* {reservation.day.strftime('%Y-%m-%d')}
+*Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
+*Место:* {reservation.place}
+'''
+
+def format_reservation_confirm(reservation: Reservation):
+    return f'''🎉 *Ваша резервация подтверждена!*
+*Дата:* {reservation.day.strftime('%Y-%m-%d')}
+*Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
+*Место:* {reservation.place}
+
+До встречи!
+'''
+
+def format_reservation_info(day, time_from, time_to, place):
+    return f"""
+День: {day.strftime('%Y-%m-%d')}\n\
+Время: {time_from.strftime('%H:%M')} - {time_to.strftime('%H:%M')}\n\
+Место: {place}
+"""

@@ -1,88 +1,88 @@
 from telebot.handler_backends import State, StatesGroup
-
+from telebot import TeleBot, types
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram_bot_calendar import DetailedTelegramCalendar, WMonthTelegramCalendar, LSTEP
 from util import db, utils
 import pandas as pd
 from datetime import datetime as dt
-from config import places
+from texts import *  # Import all texts for the screens
 from classes.classes import Reservation
-
-# from classes.classes import MyCalendar
+from util.utils import format_reservation_recap, format_reservation_info
+from telegram.constants import ParseMode
 
 import json
+import config
 
 reservations_table = db.ReservationTable()
 
 class BotStates(StatesGroup):
-        state_start = State()  # Do I need this?
+    state_start = State()
+    state_main_menu = State()
 
-        state_main_menu = State()
+    # New Reservation
+    state_reservation_menu_type = State()
+    state_reservation_menu_hours = State()
+    state_reservation_menu_date = State()
+    state_reservation_menu_time = State()
+    state_reservation_menu_place = State()
+    state_reservation_menu_recap = State()
 
-        # New Reservation
-        state_reservation_menu_type = State()
-        state_reservation_menu_hours = State()
-        state_reservation_menu_date = State()
-        state_reservation_menu_time = State()
-        state_reservation_menu_place = State()
-        state_reservation_menu_recap = State()
+    # My Reservations
+    state_my_reservation_list = State()
+    state_my_reservation = State()
 
-        # My Reservations
-        state_my_reservation_list = State()
-        state_my_reservation = State()
+    state_info = State()
 
-        state_info = State()
-
-
-def show_main_menu(bot, message):
+def show_main_menu(bot:TeleBot, message):
     markup = InlineKeyboardMarkup()
     markup.row_width = 2
-    markup.add  (
-                    InlineKeyboardButton('🆕 Новая резервация', callback_data='cb_new_reservation'),
-                    InlineKeyboardButton('🆕 Мои резервации', callback_data='cb_my_reservations'),
-                    InlineKeyboardButton('⏺️ О нас', callback_data='cb_info')
-                )
+    markup.add(
+        InlineKeyboardButton(NEW_RESERVATION_BUTTON, callback_data='cb_new_reservation'),
+        InlineKeyboardButton(MY_RESERVATIONS_BUTTON, callback_data='cb_my_reservations'),
+        InlineKeyboardButton(ABOUT_US_BUTTON, callback_data='cb_info')
+    )
+    bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+    bot.send_message(message.chat.id, WELCOME_MESSAGE, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
 
-    bot.send_message(message.chat.id, 'Welcome to Ikigai bot! 🎉', reply_markup=markup)
-
-
-
-def show_reservation_type(bot, callback):
+def show_reservation_type(bot:TeleBot, callback):
     markup = InlineKeyboardMarkup()
     markup.row_width = 2
-    markup.add  ( 
-                    InlineKeyboardButton('Hairstyle', callback_data='hairstyle'),
-                    InlineKeyboardButton('Brows', callback_data='brows'),
-                    InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),
-                )
+    markup.add(
+        InlineKeyboardButton(HAIRSTYLE_BUTTON, callback_data='hairstyle'),
+        InlineKeyboardButton(BROWS_BUTTON, callback_data='brows'),
+        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+    )
 
-    bot.send_message(callback.message.chat.id, 'Какое рабочее место Вам нужно?', reply_markup=markup)
+    chatId = callback.message.chat.id
+    messageId = callback.message.message_id
+    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_WORKPLACE_MESSAGE, reply_markup=markup)
 
-
-def show_hours(bot, callback):
+def show_hours(bot:TeleBot, callback):
     markup = InlineKeyboardMarkup()
     markup.row_width = 1
-    markup.add  (   
-                    InlineKeyboardButton('🕐 1 час', callback_data='1'),
-                    InlineKeyboardButton('🕐 2 часа', callback_data='2'),
-                    InlineKeyboardButton('🕐 3 часа', callback_data='3'),
-                    InlineKeyboardButton('🕐 6 часов (полдня)', callback_data='6'),
-                    InlineKeyboardButton('Other...', callback_data='cb_hours_other'),
-                    InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),
-                )
+    markup.add(
+        InlineKeyboardButton(ONE_HOUR_BUTTON, callback_data='1'),
+        InlineKeyboardButton(TWO_HOURS_BUTTON, callback_data='2'),
+        InlineKeyboardButton(THREE_HOURS_BUTTON, callback_data='3'),
+        InlineKeyboardButton(SIX_HOURS_BUTTON, callback_data='6'),
+        InlineKeyboardButton(OTHER_HOURS_BUTTON, callback_data='cb_hours_other'),
+        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+    )
 
-    bot.send_message(callback.message.chat.id, 'How much time do you need?', reply_markup=markup)
-
+    chatId = callback.message.chat.id
+    messageId = callback.message.message_id
+    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_TIME_MESSAGE, reply_markup=markup)
 
 def format_calendar(calendar, new_reservation: Reservation):
     global reservations_table
     json_calendar = json.loads(calendar)
     calendar = InlineKeyboardMarkup(InlineKeyboardMarkup.de_json(json_calendar).keyboard)
-    calendar.add(InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),)
+    calendar.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
 
-    reservations_filtered_by_places = reservations_table.table[reservations_table.table['Type'].isin(places[new_reservation.type])]
+    # Filter the reservations_table by 'Type' first
+    filtered_by_type = reservations_table.table[reservations_table.table['Type'] == new_reservation.type]
 
-    available_days = utils.find_available_days(new_reservation, reservation_table=reservations_filtered_by_places)
+    available_days = utils.find_available_days(new_reservation, reservation_table=filtered_by_type)
 
     date_format = '%Y_%m_%d'
 
@@ -97,115 +97,133 @@ def format_calendar(calendar, new_reservation: Reservation):
                     day.text = '✖️'
                     day.callback_data = 'cb_no_timeslots'
                 
-
     return calendar
 
-def show_date(bot, callback, new_reservation):
+def show_date(bot:TeleBot, callback, new_reservation):
     global reservations_table
     reservations_table.read_table_to_df()
     calendar, step = WMonthTelegramCalendar().build()
     calendar = format_calendar(calendar, new_reservation)
-    bot.send_message(callback.message.chat.id, 'Выберете подходящий для вас день:', reply_markup=calendar)
 
+    chatId = callback.message.chat.id
+    messageId = callback.message.message_id
+    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_DATE_MESSAGE, reply_markup=calendar)
 
-def show_time(bot, callback, new_reservation: Reservation):
+def show_time(bot:TeleBot, callback, new_reservation: Reservation, going_back=False):
     global timeslots
-    markup = InlineKeyboardMarkup()
 
-    if callback.data != 'cb_back':
+    if callback.data != 'cb_back':  # Fix this if
         date = callback.data
         parts = callback.data.split('_')
         date_str = '_'.join(parts[-3:])
         date_str = date_str.replace('_', '-')
         date = dt.strptime(date_str, '%Y-%m-%d')
-        date_str = date.strftime('%Y-%m-%d')
     elif callback.data == 'cb_back':
         date = new_reservation.time_from
-        date_str = date.strftime('%Y-%m-%d')
 
     timeslots = utils.find_timeslots(new_reservation, reservations_table.table, date)
 
+    buttons = []
     for timeslot, places in timeslots.items():
-        markup.add(InlineKeyboardButton(timeslot, callback_data=f'{timeslot}_p{places}'))
+        buttons.append(InlineKeyboardButton(timeslot, callback_data=f'{timeslot}_p{places}'))
 
-    markup.add(InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),)
-    bot.send_message(callback.message.chat.id, 'Выбетере подходящее для вас время', reply_markup=markup)
+    rows = [buttons[i:i + 4] for i in range(0, len(buttons), 4)]
+    # Create the markup
+    markup = InlineKeyboardMarkup(rows)
 
+    markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
 
-def show_place(bot, callback, new_reservation: Reservation):
+    if going_back:
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+        bot.delete_message(chat_id=chatId, message_id=messageId)
+        bot.send_message(callback.message.chat.id, text=SELECT_TIME_SLOT_MESSAGE, reply_markup=markup)
+    else:
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_TIME_SLOT_MESSAGE, reply_markup=markup)
+
+def show_place(bot:TeleBot, callback, new_reservation: Reservation):
     markup = InlineKeyboardMarkup()
     markup.row_width = 4
     for place in new_reservation.available_places:
         markup.add(InlineKeyboardButton(f'Место {place}', callback_data=f'place_{place}'),)
 
-    markup.add(InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),)
+    markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
 
-    bot.send_photo(callback.message.chat.id, caption='Выберете рабочее место.', photo=open('img/seats/empty.png', 'rb'), reply_markup=markup)
+    chatId = callback.message.chat.id
+    messageId = callback.message.message_id
+    bot.delete_message(chat_id=chatId, message_id=messageId)
+    bot.send_photo(chat_id=chatId, caption=SELECT_SEAT_MESSAGE, photo=open('img/seats/places_all.jpg', 'rb'), reply_markup=markup)
 
-
-def show_recap(bot, callback, new_reservation: Reservation):
+def show_recap(bot:TeleBot, callback, new_reservation: Reservation):
     markup = InlineKeyboardMarkup()
     markup.row_width = 1
-    markup.add  (   
-                    InlineKeyboardButton('Оплатить 🪙', callback_data='pay_now'),
-                    InlineKeyboardButton('Оплатить позже ⌛', callback_data='pay_later'),
-                    InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),
-                )
+    markup.add(
+        InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now'),
+        InlineKeyboardButton(PAY_LATER_BUTTON, callback_data='pay_later'),
+        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+    )
     
-    img_path = f'img/seats/place-{new_reservation.place}.png'
+    img_path = f'img/seats/places_{new_reservation.place}.jpg'
 
-    recap_string = f"""
-    Ваша резервация:
-    {new_reservation.day.strftime('%d.%m.%Y')}
-    {new_reservation.time_from.strftime('%H:%M')} - {new_reservation.time_to.strftime('%H:%M')} ({new_reservation.period} часа)
-    И так далее ..."""
+    recap_string = format_reservation_recap(new_reservation)
 
-    bot.send_photo(callback.message.chat.id, caption=recap_string, photo=open(img_path, 'rb'), reply_markup=markup)
+    chatId = callback.message.chat.id
+    messageId = callback.message.message_id
+    bot.delete_message(chat_id=chatId, message_id=messageId)
+    bot.send_photo(callback.message.chat.id, caption=recap_string, photo=open(img_path, 'rb'), reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
 
-
-def show_info(bot, callback):
+def show_info(bot:TeleBot, callback):
     markup = InlineKeyboardMarkup()
     markup.row_width = 1
-    markup.add(InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),)
-    bot.send_message(callback.message.chat.id, 'Информация о нас.\nКонтакты.\nСсылки.', reply_markup=markup)
+    markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
 
+    chatId = callback.message.chat.id
+    messageId = callback.message.message_id
+    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=INFO_MESSAGE, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
 
 def show_my_reservations(bot, callback):
     reservations_table.read_table_to_df()
     reservations_df = reservations_table.table
-    my_reservations_df = reservations_df[reservations_df['TelegramId'] == str(callback.from_user.id)]
-    # TODO: if payed, mark somehow
+    current_time = dt.now().strftime('%H:%M')
+    my_reservations_df = reservations_df[(reservations_df['TelegramId'] == str(callback.from_user.id)) & (reservations_df['From'] > current_time)]
     markup = InlineKeyboardMarkup()
     markup.row_width = 1
 
     for index, r in my_reservations_df.iterrows():
         markup.add(InlineKeyboardButton(f'{r["Day"].strftime("%Y-%m-%d").replace("-", ".")}  {r["From"].strftime("%H:%M")} - {r["To"].strftime("%H:%M")}', callback_data=r["OrderId"]),)
 
-    markup.add(InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),)
+    markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
 
-    bot.send_message(callback.message.chat.id, 'Ваши резервации:', reply_markup=markup)
+    chatId = callback.message.chat.id
+    messageId = callback.message.message_id
+    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=MY_RESERVATIONS_MESSAGE, reply_markup=markup)
 
-
-def show_my_reservation(bot, callback, reservations_table: db.ReservationTable):
+def show_my_reservation(bot:TeleBot, callback, reservations_table: db.ReservationTable):
     reservation_id = callback.data
     reservation = reservations_table.table.loc[reservations_table.table['OrderId'] == reservation_id]
 
     markup = InlineKeyboardMarkup()
     markup.row_width = 1
     if reservation['Payed'].values[0] == 'False':
-        markup.add(InlineKeyboardButton('Оплатить', callback_data='pay_now'),)
+        markup.add(InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now'),)
 
     markup.add(
-        InlineKeyboardButton('Отменить резервацию', callback_data=f'delete_{reservation_id}'),
-        InlineKeyboardButton('🔙 Назад', callback_data='cb_back'),
-        )
+        InlineKeyboardButton(CANCEL_RESERVATION_BUTTON, callback_data=f'delete_{reservation_id}'),
+        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+    )
+    
+    chatId = callback.message.chat.id
+    messageId = callback.message.message_id
 
     if not reservation.empty:
-        reservation_info = f"""
-День: {reservation['Day'].astype('datetime64[ns]').values[0].astype('datetime64[D]').tolist().strftime('%Y-%m-%d')}\n\
-Время: {reservation['From'].astype('datetime64[ns]').values[0].astype('datetime64[m]').tolist().strftime('%H:%M')} - {reservation['To'].astype('datetime64[ns]').values[0].astype('datetime64[m]').tolist().strftime('%H:%M')}\n\
-Место: {reservation['Place'].values[0]}
-"""
-        bot.send_message(callback.message.chat.id, reservation_info, reply_markup=markup)
+        reservation_info = format_reservation_info(
+            reservation['Day'].astype('datetime64[ns]').values[0].astype('datetime64[D]').tolist(),
+            reservation['From'].astype('datetime64[ns]').values[0].astype('datetime64[m]').tolist(),
+            reservation['To'].astype('datetime64[ns]').values[0].astype('datetime64[m]').tolist(),
+            reservation['Place'].values[0]
+        )
+        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)
     else:
-        bot.send_message(callback.message.chat.id, "Резервация не найдена...")
+        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=RESERVATION_NOT_FOUND_MESSAGE)

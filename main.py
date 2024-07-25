@@ -14,6 +14,7 @@ from telebot import custom_filters
 from states.states import BotStates
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 from telegram_bot_calendar import DetailedTelegramCalendar, WMonthTelegramCalendar, LSTEP
+from telegram.constants import ParseMode
 
 import states.states as states
 
@@ -23,6 +24,10 @@ from telebot.handler_backends import State, StatesGroup
 from util import db, utils
 from classes.classes import Reservation
 import ast
+
+from config import *
+from keys import token
+from texts import *
 
 load_dotenv()
 
@@ -40,13 +45,13 @@ if __name__ == '__main__':
     new_reservation : Reservation
     
     bot_token : str | None = os.environ.get('BOT_TOKEN')
-    bot = telebot.TeleBot(bot_token, state_storage=state_storage)
+    bot = telebot.TeleBot(token=token, state_storage=state_storage)
 
     @bot.message_handler(commands=['start'])
     def start(message):
         bot.set_state(user_id=message.from_user.id, state=BotStates.state_main_menu)
         states.show_main_menu(bot, message)
-            
+    
 
     @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_main_menu)
     def callback_query(call):
@@ -166,7 +171,7 @@ if __name__ == '__main__':
         global new_reservation
         if call.data == 'cb_back':
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_time)
-            states.show_time(bot, call, new_reservation)
+            states.show_time(bot, call, new_reservation, going_back=True)
         else:
             place = int(call.data.split('_')[1])
             new_reservation.place = place
@@ -182,14 +187,17 @@ if __name__ == '__main__':
             states.show_place(bot, call, new_reservation)
         else:
             new_reservation.orderid = utils.generate_order_id(new_reservation)
+
+            # AG: payment here
             save_result_ok = states.reservations_table.save_reservation_to_table(new_reservation=new_reservation)
             if save_result_ok:
-                bot.send_message(call.message.chat.id, '🎉 Ваша резервация подтверждена! \nДо встречи.')
+                bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
                 bot.set_state(call.from_user.id, BotStates.state_start)
+                bot.send_message(call.message.chat.id, utils.format_reservation_confirm(new_reservation), parse_mode=ParseMode.MARKDOWN)
 
 
     # @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_done)
-    # def callback_query(call):
+    # def callback_query(call): 
     #     bot.set_state(call.from_user.id, BotStates.state_start)
     #     states.show_start(bot, call)
 
