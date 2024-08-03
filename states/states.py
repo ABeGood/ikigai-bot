@@ -22,6 +22,8 @@ class BotStates(StatesGroup):
     # New Reservation
     state_reservation_menu_type = State()
     state_reservation_menu_hours = State()
+    state_admin_chat = State()
+
     state_reservation_menu_date = State()
     state_reservation_menu_time = State()
     state_reservation_menu_place = State()
@@ -61,11 +63,11 @@ def show_hours(bot:TeleBot, callback):
     markup = InlineKeyboardMarkup()
     markup.row_width = 1
     markup.add(
-        InlineKeyboardButton(ONE_HOUR_BUTTON, callback_data='1'),
-        InlineKeyboardButton(TWO_HOURS_BUTTON, callback_data='2'),
-        InlineKeyboardButton(THREE_HOURS_BUTTON, callback_data='3'),
-        InlineKeyboardButton(SIX_HOURS_BUTTON, callback_data='6'),
-        InlineKeyboardButton(OTHER_HOURS_BUTTON, callback_data='cb_hours_other'),
+        InlineKeyboardButton(config.period_buttons.get('hour_1')[1], callback_data=str(config.period_buttons.get('hour_1')[0])),
+        InlineKeyboardButton(config.period_buttons.get('hour_3')[1], callback_data=str(config.period_buttons.get('hour_3')[0])),
+        InlineKeyboardButton(config.period_buttons.get('day_1')[1], callback_data=str(config.period_buttons.get('day_1')[0])),
+        InlineKeyboardButton(config.period_buttons.get('day_7')[1], callback_data=str(config.period_buttons.get('day_7')[0])),
+        InlineKeyboardButton(config.period_buttons.get('other')[1], callback_data=str(config.period_buttons.get('other')[0])),
         InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
     )
 
@@ -160,7 +162,7 @@ def show_recap(bot:TeleBot, callback, new_reservation: Reservation):
     markup = InlineKeyboardMarkup()
     markup.row_width = 1
     markup.add(
-        InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now'),
+        InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now', url=PAY_URL),
         InlineKeyboardButton(PAY_LATER_BUTTON, callback_data='pay_later'),
         InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
     )
@@ -227,3 +229,15 @@ def show_my_reservation(bot:TeleBot, callback, reservations_table: db.Reservatio
         bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)
     else:
         bot.edit_message_text(chat_id=chatId, message_id=messageId, text=RESERVATION_NOT_FOUND_MESSAGE)
+
+
+def show_admin_chat(bot:TeleBot, callback):
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 1
+    markup.add(
+        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+    )
+
+    chatId = callback.message.chat.id
+    messageId = callback.message.message_id
+    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=ADMIN_CHAT_MESSAGE, reply_markup=markup)

@@ -22,12 +22,15 @@ INFO_MESSAGE = '''*Beauty Coworking ikigai* - это рабочее простр
 MY_RESERVATIONS_MESSAGE = 'Ваши резервации:'
 RESERVATION_NOT_FOUND_MESSAGE = "Резервация не найдена..."
 
+ADMIN_CHAT_MESSAGE = 'Оставьте свое сообщение здесь и мы перешлем его администратору.'
+
 # Button texts
 NEW_RESERVATION_BUTTON = '🆕 Новая резервация'
 MY_RESERVATIONS_BUTTON = '🆕 Мои резервации'
 ABOUT_US_BUTTON = '⏺️ О нас'
 BACK_BUTTON = '🔙 Назад'
 PAY_NOW_BUTTON = 'Оплатить 🪙'
+PAY_URL = 'http://revolut.me/yuliyagb1b'
 PAY_LATER_BUTTON = 'Оплатить позже ⌛'
 CANCEL_RESERVATION_BUTTON = 'Отменить резервацию'
 

@@ -102,7 +102,7 @@ def find_timeslots(new_reservation: Reservation, reservation_table: pd.DataFrame
 
     # Filter reservations for the current day
     reservations_on_day = reservation_table[reservation_table['Day'] == day_start.strftime('%Y-%m-%d')]
-    reservations_on_day = reservations_on_day[reservations_on_day['Type'] == new_reservation.type]
+    # reservations_on_day = reservations_on_day[reservations_on_day['Type'] == new_reservation.type]
     reservations_on_day.sort_values(by='From', inplace=True)
     print(f'Reservations on {day_start.strftime("%Y-%m-%d")}: {len(reservations_on_day)}')
 
@@ -139,6 +139,7 @@ def find_overlaps(reservations: pd.DataFrame, time_gap: tuple[datetime, ...]) ->
     
     return reservations.loc[mask]
 
+
 def generate_order_id(r: Reservation):
     return f'{r.day.strftime("%Y-%m-%d")}_{r.period}h_{r.time_from.strftime("%H-%M")}_p{r.place}_{r.telegramId}'
 
@@ -149,10 +150,20 @@ def format_reservation_recap(reservation: Reservation):
 *Дата:* {reservation.day.strftime('%Y-%m-%d')}
 *Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}
+*Стоимость:* _*666*_ CZK
 '''
 
 def format_reservation_confirm(reservation: Reservation):
-    return f'''🎉 *Ваша резервация подтверждена!*
+    return f'''🎉 *Ваша резервация подтверждена и ждет оплаты!*
+*Дата:* {reservation.day.strftime('%Y-%m-%d')}
+*Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
+*Место:* {reservation.place}
+
+До встречи!
+'''
+
+def format_reservation_confirm_and_payed(reservation: Reservation):
+    return f'''🎉 *Ваша резервация подтверждена и оплачена!*
 *Дата:* {reservation.day.strftime('%Y-%m-%d')}
 *Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}

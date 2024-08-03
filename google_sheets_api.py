@@ -4,20 +4,21 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 
 scope = ['https://www.googleapis.com/auth/spreadsheets',
-         'https://www.googleapis.com/auth/drive']
+         'https://www.googleapis.com/auth/drive',
+         'https://www.googleapis.com/auth/calendar',]
 
 credentials = ServiceAccountCredentials.from_json_keyfile_name('ikigai-db-credentials.json', scope)
 client = gspread.authorize(credentials)
 
-# reservations_table = client.create('reservations')
+# reservations_table = client.create('ikigai_reservations')
 # reservations_table.share('openzzggl@gmail.com', perm_type='user', role='writer')
-reservations_table = client.open('reservations').sheet1
+reservations_table = client.open('ikigai_reservations').sheet1
 
 
 
 def read_table_to_df():
     global reservations_table
-    reservations_table = client.open('reservations').sheet1
+    reservations_table = client.open('ikigai_reservations').sheet1
 
     data = reservations_table.get_all_values()
     headers = data.pop(0)

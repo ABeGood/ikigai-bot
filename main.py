@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 import pandas as pd
 import telebot # telebot
 import datetime as dt
+import asyncio
+import time
 
 from telebot import custom_filters
 from states.states import BotStates
@@ -21,6 +23,7 @@ import states.states as states
 # States storage
 from telebot.storage import StateMemoryStorage
 from telebot.handler_backends import State, StatesGroup
+from telebot.types import ReactionTypeEmoji
 from util import db, utils
 from classes.classes import Reservation
 import ast
@@ -116,11 +119,32 @@ if __name__ == '__main__':
         if call.data == 'cb_back':
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
             states.show_reservation_type(bot, call)
+        elif call.data == 'talk_to_admin':
+            # bot.send_message(call.message.chat.id, 'Please contact the administrator for this request.')
+            bot.set_state(call.from_user.id, BotStates.state_admin_chat)
+            states.show_admin_chat(bot, call)
         else:
             hours = int(call.data)
             new_reservation.period = hours
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
             states.show_date(bot, call, new_reservation)
+
+
+    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_admin_chat)
+    def callback_query(call):
+        if call.data == 'cb_back':
+            bot.set_state(call.from_user.id, BotStates.state_main_menu)
+            states.show_main_menu(bot, call.message)
+        
+        # Catch and resend message here:
+        
+
+    # async def handle_message(update: Update, context: CallbackContext):
+    #     user_status = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
+    #     status_message = f"User status {update.effective_user.mention_html()} in this chat: {user_status.status}"
+    #     await context.bot.send_message(chat_id=update.effective_chat.id,
+    #                                 text=status_message,
+    #                                 parse_mode='HTML')
 
 
     @bot.callback_query_handler(func=DetailedTelegramCalendar.func(), state=BotStates.state_reservation_menu_date)
@@ -201,6 +225,27 @@ if __name__ == '__main__':
     #     bot.set_state(call.from_user.id, BotStates.state_start)
     #     states.show_start(bot, call)
 
+
+    @bot.message_handler(func = lambda msg: msg.text is not None and '/' not in msg.text, state=BotStates.state_admin_chat)
+    def handle_message(msg):
+        if msg.text == "Hi":
+            bot.send_message(msg.chat.id,"Hello!")
+        else:
+            # bot.delete_message(chat_id=msg.chat.id, message_id=msg.message_id)
+            # bot.send_message(msg.chat.id, "Got you.")
+            bot.forward_message(chat_id=admin_chat_id, from_chat_id=msg.chat.id, message_id=msg.message_id)
+            bot.set_state(msg.from_user.id, BotStates.state_admin_chat)
+
+            time.sleep(2.5)
+
+            bot.set_message_reaction(msg.chat.id, msg.message_id, [ReactionTypeEmoji('👍')], is_big=True)
+            markup = InlineKeyboardMarkup()
+            markup.row_width = 1
+            markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
+
+            time.sleep(0.5)
+            bot.send_message(msg.chat.id, "Что-нибудь еще?", reply_markup=markup)
+            
 
     bot.add_custom_filter(custom_filters.StateFilter(bot))
     bot.infinity_polling(skip_pending=True)
