@@ -23,7 +23,8 @@ CALENDAR_NAME = 'Ikigai Reservations'
 # If modifying these scopes, delete your previously saved credentials
 # at ~/.credentials/calendar-python-quickstart.json
 SCOPES = 'https://www.googleapis.com/auth/calendar'
-CLIENT_SECRET_FILE = '.client_secret.json'
+CLIENT_SECRET_FILE = 'client_secret.json'
+CREDENTIAL_PATH = 'ikigai-db-credentials.json'
 APPLICATION_NAME = 'ikigai-db'
 
 
@@ -36,16 +37,17 @@ def get_credentials():
     Returns:
         Credentials, the obtained credential.
     """
-    # home_dir = '/app'
-    # credential_dir = os.path.join(home_dir, '.credentials')
-    # if not os.path.exists(credential_dir):
-    #     os.makedirs(credential_dir)
-    # credential_path = os.path.join(credential_dir,
-    #                                'ikigai-db-credentials.json')
 
-    # store = Storage(credential_path)
-    store = Storage('ikigai-db-credentials.json')
+    store = Storage(CREDENTIAL_PATH)
     credentials = store.get()
+    if not credentials or credentials.invalid:
+        flow = client.flow_from_clientsecrets(CLIENT_SECRET_FILE, SCOPES)
+        flow.user_agent = APPLICATION_NAME
+        if flags:
+            credentials = tools.run_flow(flow, store, flags)
+        else:  # Needed only for compatibility with Python 2.6
+            credentials = tools.run(flow, store)
+        print('Storing credentials to ' + CREDENTIAL_PATH)
     return credentials
 
 
