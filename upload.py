@@ -44,7 +44,7 @@ def get_credentials():
     #                                'ikigai-db-credentials.json')
 
     # store = Storage(credential_path)
-    store = Storage(CLIENT_SECRET_FILE)
+    store = Storage('ikigai-db-credentials.json')
     credentials = store.get()
     return credentials
 
