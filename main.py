@@ -50,8 +50,16 @@ if __name__ == '__main__':
     bot_token : str = os.environ.get('BOT_TOKEN')
     bot = telebot.TeleBot(token=bot_token, state_storage=state_storage)
 
+    def notify_admin(text:str):
+        notification_text = f"""
+    {text}        
+
+    """
+        bot.send_message(chat_id=admin_chat_id, text=notification_text, parse_mode=ParseMode.MARKDOWN)
+
     @bot.message_handler(commands=['start'])
     def start(message):
+        chat_id = message.chat.id
         bot.set_state(user_id=message.from_user.id, state=BotStates.state_main_menu)
         states.show_main_menu(bot, message)
     
@@ -60,7 +68,7 @@ if __name__ == '__main__':
     def callback_query(call):
         global new_reservation
         if call.data == "cb_new_reservation":
-            new_reservation = Reservation(telegramId=call.from_user.id, name=call.from_user.full_name)
+            new_reservation = Reservation(telegramId=call.from_user.id, name=call.from_user.full_name)  # TODO: full_name
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
             states.show_reservation_type(bot, call)
         elif call.data == 'cb_my_reservations':
@@ -95,9 +103,11 @@ if __name__ == '__main__':
             states.show_my_reservations(bot, call)
         elif call.data.startswith('delete_'):
             order_id = '_'.join(call.data.split('_')[1:])
-            states.reservations_table.delete_reservation(order_id)
+            deleted_reservation = states.reservations_table.delete_reservation(order_id)
             bot.set_state(call.from_user.id, BotStates.state_my_reservation_list)
             states.show_my_reservations(bot, call)
+
+            notify_admin(f"✴️ Reservation was deleted:\n{deleted_reservation.iloc[0]['From']}\n {deleted_reservation.iloc[0]['OrderId']} \n{deleted_reservation.iloc[0]['CreationTime']}")
 
                 
     @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_type)
@@ -158,10 +168,31 @@ if __name__ == '__main__':
                                 call.message.message_id,
                                 reply_markup=key)
         elif result:
-            bot.set_state(user_id=call.from_user.id, state=BotStates.state_reservation_menu_time)
-            day = pd.to_datetime(result)
-            new_reservation.day = day
-            states.show_time(bot, call, new_reservation)
+            if new_reservation.period <= 12:
+                bot.set_state(user_id=call.from_user.id, state=BotStates.state_reservation_menu_time)
+                day = pd.to_datetime(result)
+                new_reservation.day = day
+                states.show_time(bot, call, new_reservation)
+            elif new_reservation.period % 12 == 0:
+                bot.set_state(user_id=call.from_user.id, state=BotStates.state_reservation_menu_place)
+                day = pd.to_datetime(result)
+                new_reservation.day = day
+
+                timeslots = utils.find_timeslots_for_days(new_reservation, states.reservations_table.table, new_reservation.day)
+
+                available_places = []
+
+                buttons = []
+                for timeslot, places in timeslots.items():
+                    buttons.append(InlineKeyboardButton(timeslot, callback_data=f'{timeslot}_p{places}'))
+                    available_places.append(places)
+
+                new_reservation.available_places = available_places[0]
+                new_reservation.time_from = dt.datetime.combine(new_reservation.day.date(), workday_start)
+                new_reservation.time_to = new_reservation.time_from + dt.timedelta(hours=new_reservation.period)
+
+                bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
+                states.show_place(bot, call, new_reservation=new_reservation)
 
 
     @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_date)
@@ -182,6 +213,7 @@ if __name__ == '__main__':
             callback_data = call.data.split('_p')
             time = pd.to_datetime(callback_data[0])
             available_places = ast.literal_eval(callback_data[1])
+
             new_reservation.available_places = available_places
             new_reservation.time_from = dt.datetime.combine(new_reservation.day.date(), time.time())
             new_reservation.time_to = new_reservation.time_from + dt.timedelta(hours=new_reservation.period)
@@ -209,21 +241,43 @@ if __name__ == '__main__':
         if call.data == 'cb_back':
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
             states.show_place(bot, call, new_reservation)
-        else:
+        elif call.data == 'pay_now':
+            bot.set_state(call.from_user.id, BotStates.state_prepay)
+            states.show_prepay(bot, call, new_reservation)
+        elif call.data == 'pay_later':
+            new_reservation.payed = 'No'
             new_reservation.orderid = utils.generate_order_id(new_reservation)
-
-            # AG: payment here
             save_result_ok = states.reservations_table.save_reservation_to_table(new_reservation=new_reservation)
             if save_result_ok:
                 bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
                 bot.set_state(call.from_user.id, BotStates.state_start)
                 bot.send_message(call.message.chat.id, utils.format_reservation_confirm(new_reservation), parse_mode=ParseMode.MARKDOWN)
 
+                notify_admin('❇️ New reservation:\n'+utils.format_reservation_confirm(new_reservation))
+        else:
+            print('Unknown callback')
 
-    # @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_done)
-    # def callback_query(call): 
-    #     bot.set_state(call.from_user.id, BotStates.state_start)
-    #     states.show_start(bot, call)
+
+    @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_prepay)
+    def callback_query(call): 
+        global new_reservation
+        if call.data == 'cb_back':
+            bot.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
+            states.show_recap(bot, call, new_reservation)
+        elif call.data == 'pay_done':
+            bot.set_state(call.from_user.id, BotStates.state_start)
+            new_reservation.payed = 'Pending'
+            new_reservation.orderid = utils.generate_order_id(new_reservation)
+            save_result_ok = states.reservations_table.save_reservation_to_table(new_reservation=new_reservation)
+            if save_result_ok:
+                bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
+                bot.set_state(call.from_user.id, BotStates.state_start)
+                bot.send_message(call.message.chat.id, utils.format_reservation_confirm_and_payed(new_reservation), parse_mode=ParseMode.MARKDOWN)
+
+                notify_admin('❇️ New reservation:\n'+utils.format_reservation_confirm_and_payed(new_reservation))
+        else:
+            print('Unknown callback')
+
 
 
     @bot.message_handler(func = lambda msg: msg.text is not None and '/' not in msg.text, state=BotStates.state_admin_chat)

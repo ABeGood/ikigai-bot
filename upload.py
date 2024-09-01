@@ -56,23 +56,37 @@ def get_credentials():
     return credentials
 
 
-def main():
-    """Shows basic usage of the Google Calendar API.
-
-    Creates a Google Calendar API service object and outputs a list of the next
-    10 events on the user's calendar.
-    """
+def get_service():
     credentials = get_credentials()
     http = credentials.authorize(httplib2.Http())
     service = discovery.build('calendar', 'v3', http=http)
+    return service
 
-    calendar_id = initCalendar(service, CALENDAR_NAME)
 
-    mat = getMatrixFromCSV('timetable.csv')
-    events = parseMatrixIntoEvents(mat)
+def clear_calendar(service, calendar_id):
+    print(f"Clearing calendar {calendar_id}...")
+    events_result = service.events().list(calendarId=calendar_id, singleEvents=True).execute()
+    events = events_result.get('items', [])
 
-    # for x in events:
-    #     uploadEvent(service, x, calendar_id)
+    for event in events:
+        service.events().delete(calendarId=calendar_id, eventId=event['id']).execute()
+        print(f"Deleted event: {event['summary']}")
+
+    print("Calendar cleared successfully.")
+
+
+def sync_calendar_with_reservations(service, calendar_id, reservations):
+    print("Syncing calendar with reservations...")
+    for reservation in reservations:
+        event = createEvent(
+            start=reservation['From'],
+            end=reservation['To'],
+            subject=f"{reservation['Name']} - {reservation['Type']}",
+            place=reservation['Place'],
+            colour='green'
+        )
+        uploadEvent(service, event, calendar_id)
+    print("Calendar synced successfully.")
 
 
 def deleteAllCalendars_NO(service, summary):
@@ -106,27 +120,11 @@ def getCalendarId(service, calendarSummary):
     return None
 
 
-def uploadEvent(event):
-    print('Creating event... ' + event['summary'] + ' @ ' + event['start']['dateTime'])
-
-    credentials = get_credentials()
-    http = credentials.authorize(httplib2.Http())
-    service = discovery.build('calendar', 'v3', http=http)
-
-    # calendar_id = initCalendar(service, CALENDAR_NAME)
-    calendar_id = '54ef8d9bf21e3ca24bfdb00d77684478afca8c301b3c23543eed688205002d5f@group.calendar.google.com'
-
+def uploadEvent(service, event, calendar_id):
+    print(f"Creating event... {event['summary']} @ {event['start']['dateTime']}")
     event = service.events().insert(calendarId=calendar_id, body=event).execute()
     print('Event created!')
 
-
-
-# def uploadEvent(service, event, calenderID):
-#     #print(event)
-#     print('Creating event... ' + event['summary'] + ' @ ' + event['start']['dateTime'])
-
-#     event = service.events().insert(calendarId=calenderID, body=event).execute()
-#     print('Event created!')
 
 
 def initCalendar(service, summary):
@@ -282,7 +280,3 @@ def getMatrixFromCSV(csvFile):
             rowCount += 1
 
     return matrix
-
-
-if __name__ == '__main__':
-    main()

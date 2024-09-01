@@ -20,16 +20,21 @@ def read_table_to_df():
     global reservations_table
     reservations_table = client.open('ikigai_reservations').sheet1
 
-    data = reservations_table.get_all_values()
-    headers = data.pop(0)
+    columns_to_read = ['CreationTime', 'OrderId', 'TelegramId', 'Name', 'Type', 'Place', 'Day', 'From', 'To', 'Period', 'Payed']
 
-    df = pd.DataFrame(data=data, columns=headers)
+    data = reservations_table.get_all_records(expected_headers=columns_to_read)
+
+    df = pd.DataFrame(data=data, columns=columns_to_read)
 
     return df
 
 
 def save_df_to_table(df):
     global reservations_table
+
+    # reservations_table.append_rows(values=, table_range='A:K')
+    # reservations_table.delete_columns(0, 10)
+
     reservations_table.clear()
     df = df.fillna('')
     df = df.astype(str)

@@ -11,6 +11,7 @@ class Reservation():
     day : datetime
     time_from : datetime
     time_to : datetime
+    payed : str
     available_places : list[int]
 
     def __init__(self, telegramId:str, name:str) -> None:

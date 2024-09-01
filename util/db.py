@@ -2,7 +2,10 @@ import pandas as pd
 import google_sheets_api as gs
 from datetime import datetime
 from classes.classes import Reservation
-from upload import createEvent, uploadEvent
+from upload import createEvent, uploadEvent, get_service, clear_calendar, sync_calendar_with_reservations
+import threading
+
+CALENDAR_ID = '54ef8d9bf21e3ca24bfdb00d77684478afca8c301b3c23543eed688205002d5f@group.calendar.google.com'
 
 class ReservationTable:
 
@@ -25,6 +28,12 @@ class ReservationTable:
         self.table = updated_table
 
 
+    def sync_calendar(self):
+        service = get_service()
+        clear_calendar(service, CALENDAR_ID)
+        sync_calendar_with_reservations(service, CALENDAR_ID, self.table.to_dict('records'))
+
+
     def save_reservation_to_table(self, new_reservation: Reservation):
         new_reservation_df = pd.DataFrame(
             {
@@ -38,37 +47,38 @@ class ReservationTable:
                 'From': [new_reservation.time_from],
                 'To': [new_reservation.time_to],
                 'Period': [new_reservation.period],
-                'Payed': [False]
+                'Payed': [new_reservation.payed],
             }
         )
 
         self.table = pd.concat([self.table, new_reservation_df])
         self.table.dropna(inplace=True)  # Remove empty rows
 
-        # Here add to calendar; !!! Move from here
-        calendar_event = createEvent(start=new_reservation.time_from, 
-                                     end=new_reservation.time_to, 
-                                     subject=new_reservation.name, 
-                                     place=new_reservation.place, 
-                                     colour='green')
+        try:
+            gs.save_df_to_table(self.table)
+            threading.Thread(target=self.sync_calendar, daemon=True).start()
+            return True
+        except Exception as e:
+            print(e.with_traceback)
+            return False
         
-        uploadEvent(calendar_event)
+        
+    def delete_reservation(self, reservation_id: str):
+        deleted_reservation = self.table[self.table['OrderId'] == reservation_id]
+        self.table = self.table[self.table['OrderId'] != reservation_id]
+        self.table.dropna(inplace=True)  # Remove empty rows
 
         try:
             gs.save_df_to_table(self.table)
-            return True
+            threading.Thread(target=self.sync_calendar, daemon=True).start()
+            return deleted_reservation
         except Exception as e:
             print(e.with_traceback)
-            return False
+            return None
         
-    def delete_reservation(self, reservation_id: str):
-        self.table = self.table[self.table['OrderId'] != reservation_id]
-        self.table.dropna(inplace=True)  # Remove empty rows
-        try:
-            gs.save_df_to_table(self.table)
-            return True
-        except Exception as e:
-            print(e.with_traceback)
-            return False
+    
+    def force_sync_calendar(self):
+        self.read_table_to_df()  # Refresh the table data
+        self.sync_calendar()  # Sync the calendar with the latest data
         
 
