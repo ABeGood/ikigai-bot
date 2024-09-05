@@ -193,7 +193,17 @@ def show_prepay(bot:TeleBot, callback, new_reservation: Reservation):
     chatId = callback.message.chat.id
     messageId = callback.message.message_id
     bot.delete_message(chat_id=chatId, message_id=messageId)
+
+    # if len(recap_string) > 4095:
+    #     for x in range(0, len(recap_string), 4095):
+    #         # bot.reply_to(message, text=recap_string[x:x+4095])
+    #         bot.send_message(callback.message.chat.id, text=recap_string[x:x+4095], reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+    # else:
+    #     # bot.reply_to(message, text=recap_string)
+    #     bot.send_message(callback.message.chat.id, text=recap_string, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+
     bot.send_message(callback.message.chat.id, text=recap_string, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+    
 
 
 def show_info(bot:TeleBot, callback):

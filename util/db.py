@@ -2,7 +2,7 @@ import pandas as pd
 import google_sheets_api as gs
 from datetime import datetime
 from classes.classes import Reservation
-from upload import createEvent, uploadEvent, get_service, clear_calendar, sync_calendar_with_reservations
+from util.calendar import createEvent, uploadEvent, get_service, clear_calendar, sync_calendar_with_reservations
 import threading
 
 CALENDAR_ID = '54ef8d9bf21e3ca24bfdb00d77684478afca8c301b3c23543eed688205002d5f@group.calendar.google.com'

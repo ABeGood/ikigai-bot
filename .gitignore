@@ -1,6 +1,4 @@
-keys.py
-ikigai-db-credentials.json
-.client_secret.json
+keys/
 /__pycache__/**
 **/*.pyc
 *.pyc

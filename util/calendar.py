@@ -10,6 +10,8 @@ from oauth2client.file import Storage
 import datetime
 from datetime import datetime
 
+from google_sheets_api import credentials as gs_cred
+
 try:
     import argparse
     flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
@@ -23,8 +25,8 @@ CALENDAR_NAME = 'Ikigai Reservations'
 # If modifying these scopes, delete your previously saved credentials
 # at ~/.credentials/calendar-python-quickstart.json
 SCOPES = 'https://www.googleapis.com/auth/calendar'
-CLIENT_SECRET_FILE = 'client_secret.json'
-CREDENTIAL_PATH = 'ikigai-db-credentials.json'
+CLIENT_SECRET_FILE = 'keys/calendar.json'
+CREDENTIAL_PATH = 'keys/table.json'
 APPLICATION_NAME = 'ikigai-db'
 
 
@@ -38,7 +40,13 @@ def get_credentials():
         Credentials, the obtained credential.
     """
 
-    store = Storage(CREDENTIAL_PATH)
+    home_dir = os.path.expanduser('~')
+    credential_dir = os.path.join(home_dir, 'calendar')
+    if not os.path.exists(credential_dir):
+        os.makedirs(credential_dir)
+    credential_path = os.path.join(credential_dir,'table.json')
+
+    store = Storage(credential_path)
     credentials = store.get()
     if not credentials or credentials.invalid:
         flow = client.flow_from_clientsecrets(CLIENT_SECRET_FILE, SCOPES)
@@ -47,12 +55,13 @@ def get_credentials():
             credentials = tools.run_flow(flow, store, flags)
         else:  # Needed only for compatibility with Python 2.6
             credentials = tools.run(flow, store)
-        print('Storing credentials to ' + CREDENTIAL_PATH)
+        print('Storing credentials to ' + credential_path)
     return credentials
 
 
 def get_service():
     credentials = get_credentials()
+    # credentials = gs_cred
     http = credentials.authorize(httplib2.Http())
     service = discovery.build('calendar', 'v3', http=http)
     return service
