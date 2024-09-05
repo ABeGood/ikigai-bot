@@ -8,7 +8,7 @@ scope = ['https://www.googleapis.com/auth/spreadsheets',
          'https://www.googleapis.com/auth/calendar',]
 
 # credentials = ServiceAccountCredentials.from_json_keyfile_name(, scope)
-credentials = ServiceAccountCredentials.from_json_keyfile_name('app/keys/table.json', scopes=scope)
+credentials = ServiceAccountCredentials.from_json_keyfile_name('/app/keys/table.json', scopes=scope)
 client = gspread.authorize(credentials)
 
 # reservations_table = client.create('ikigai_reservations')

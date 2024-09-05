@@ -25,8 +25,8 @@ CALENDAR_NAME = 'Ikigai Reservations'
 # If modifying these scopes, delete your previously saved credentials
 # at ~/.credentials/calendar-python-quickstart.json
 SCOPES = 'https://www.googleapis.com/auth/calendar'
-CLIENT_SECRET_FILE = 'app/keys/calendar.json'
-CREDENTIAL_PATH = 'app/keys/table.json'
+CLIENT_SECRET_FILE = '/app/keys/calendar.json'
+CREDENTIAL_PATH = '/app/keys/table.json'
 APPLICATION_NAME = 'ikigai-db'
 
 
