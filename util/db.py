@@ -1,5 +1,5 @@
-from database.connection import get_db
-from database.repository import ReservationRepository
+from db.connection import get_db
+from db.repository import ReservationRepository
 from datetime import datetime
 
 class ReservationTable:
