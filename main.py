@@ -24,7 +24,7 @@ import states.states as states
 from telebot.storage import StateMemoryStorage
 from telebot.handler_backends import State, StatesGroup
 from telebot.types import ReactionTypeEmoji
-from util import db, utils
+from util import utils
 from classes.classes import Reservation
 import ast
 
@@ -93,7 +93,8 @@ if __name__ == '__main__':
             states.show_main_menu(bot, call.message)
         else:
             bot.set_state(call.from_user.id, BotStates.state_my_reservation)
-            states.show_my_reservation(bot, call, reservations_table=states.reservations_table)
+            reservation_table = states.reservation_repo.to_dataframe()
+            states.show_my_reservation(bot, call, reservations_table=reservation_table)
 
 
     @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_my_reservation)
@@ -246,8 +247,8 @@ if __name__ == '__main__':
             states.show_prepay(bot, call, new_reservation)
         elif call.data == 'pay_later':
             new_reservation.payed = 'No'
-            new_reservation.orderid = utils.generate_order_id(new_reservation)
-            save_result_ok = states.reservations_table.save_reservation_to_table(new_reservation=new_reservation)
+            new_reservation.order_id = utils.generate_order_id(new_reservation)
+            save_result_ok = states.reservation_repo.create_reservation(reservation_data=new_reservation)
             if save_result_ok:
                 bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
                 bot.set_state(call.from_user.id, BotStates.state_start)
@@ -267,8 +268,8 @@ if __name__ == '__main__':
         elif call.data == 'pay_done':
             bot.set_state(call.from_user.id, BotStates.state_start)
             new_reservation.payed = 'Pending'
-            new_reservation.orderid = utils.generate_order_id(new_reservation)
-            save_result_ok = states.reservations_table.save_reservation_to_table(new_reservation=new_reservation)
+            new_reservation.order_id = utils.generate_order_id(new_reservation)
+            save_result_ok = states.reservation_repo.create_reservation(reservation_data=new_reservation)
             if save_result_ok:
                 bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
                 bot.set_state(call.from_user.id, BotStates.state_start)

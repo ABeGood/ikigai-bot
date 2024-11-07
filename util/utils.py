@@ -155,40 +155,34 @@ def generate_available_timeslots(reservation_table: pd.DataFrame, new_reservatio
     return available_timeslots
 
 
-# def find_overlaps(reservations: pd.DataFrame, time_gap: tuple[datetime, ...]) -> pd.DataFrame:
-#     mask =  ((reservations['From'] <= time_gap[0]) & (time_gap[0] < reservations['To'])) | \
-#             ((reservations['From'] <= time_gap[1]) & (time_gap[1] < reservations['To']))   | \
-#             ((time_gap[0] <= reservations['From']) & (reservations['From'] <= time_gap[1]))   | \
-#             ((time_gap[0] < reservations['To']) & (reservations['To'] < time_gap[1]))
-    
-#     return reservations.loc[mask]
-
-
 def find_reservation_gaps(df:pd.DataFrame, selected_date:datetime|str, reservation_type:str, min_gap_hours=0):
+    """
+    Find gaps between reservations for each place on a selected date.
+    Handles empty DataFrames and returns all places as fully available.
+    
+    Args:
+        df (pd.DataFrame): Reservations DataFrame
+        selected_date (datetime|str): Date to check for gaps
+        reservation_type (str): Type of reservation (e.g., 'hairstyle', 'brows')
+        min_gap_hours (float): Minimum gap duration to consider (in hours)
+    
+    Returns:
+        dict: Dictionary of gaps for each place
+    """
     # Convert selected_date to datetime if it's a string
     if isinstance(selected_date, str):
         selected_date = datetime.strptime(selected_date, '%Y-%m-%d')
     
-    # Filter the dataframe for the selected date
-    df_day = df[df['From'].dt.date == selected_date.date()]
-    
-    # Sort by 'From' time
-    df_day = df_day.sort_values('From')
-    
     # Initialize dictionary to store gaps for each place
     gaps = {}
     
-    # Get unique places (assuming place information is in the 'OrderId')
+    # Get places for the reservation type
     places = config.places[reservation_type]
     
-    for place in places:
-        # Filter reservations for this place
-        place_reservations = df_day[df_day['Place'].astype(int) == place]
-        
-        place_gaps = []
-
-        if place_reservations.empty:
-            # If there are no reservations for this place, the whole day is a gap
+    # If DataFrame is empty or has no reservations for the day,
+    # return full day availability for all places
+    if df.empty:
+        for place in places:
             start = datetime.combine(selected_date.date(), config.workday_start)
             end = datetime.combine(selected_date.date(), config.workday_end)
             gap = {
@@ -196,46 +190,91 @@ def find_reservation_gaps(df:pd.DataFrame, selected_date:datetime|str, reservati
                 'end': end,
                 'duration': (end - start).total_seconds() / 3600  # in hours
             }
-            place_gaps.append(gap)
-            gaps[place] = place_gaps
-            continue
+            gaps[place] = [gap]
+        return gaps
+    
+    try:        
+        # Ensure datetime columns are properly formatted
+        if not pd.api.types.is_datetime64_any_dtype(df['time_from']):
+            df['time_from'] = pd.to_datetime(df['time_from']).dt.time
+            
+        if not pd.api.types.is_datetime64_any_dtype(df['time_to']):
+            df['time_to'] = pd.to_datetime(df['time_to']).dt.time
+            
+        # Filter for selected date
+        df_day = df[df['time_from'].dt.date == selected_date.date()]
         
-        # Start of the day
-        previous_end = datetime.combine(selected_date.date(), config.workday_start)
+        # Sort by start time
+        df_day = df_day.sort_values('time_from')
         
-        for _, reservation in place_reservations.iterrows():
-            if reservation['From'] > previous_end:
-                gap_duration = (reservation['From'] - previous_end).total_seconds() / 3600  # in hours
-                if gap_duration > min_gap_hours:
+        for place in places:
+            # Filter reservations for this place
+            place_reservations = df_day[df_day['place'].astype(int) == place]
+            
+            place_gaps = []
+
+            if place_reservations.empty:
+                # If there are no reservations for this place, the whole day is a gap
+                start = datetime.combine(selected_date.date(), config.workday_start)
+                end = datetime.combine(selected_date.date(), config.workday_end)
+                gap = {
+                    'start': start,
+                    'end': end,
+                    'duration': (end - start).total_seconds() / 3600  # in hours
+                }
+                place_gaps.append(gap)
+                gaps[place] = place_gaps
+                continue
+            
+            # Start of the day
+            previous_end = datetime.combine(selected_date.date(), config.workday_start)
+            
+            for _, reservation in place_reservations.iterrows():
+                if reservation['time_from'] > previous_end:
+                    gap_duration = (reservation['time_from'] - previous_end).total_seconds() / 3600
+                    if gap_duration >= min_gap_hours:
+                        gap = {
+                            'start': previous_end,
+                            'end': reservation['time_from'],
+                            'duration': gap_duration
+                        }
+                        place_gaps.append(gap)
+                
+                previous_end = reservation['time_to']
+            
+            # Check for gap at the end of the day
+            day_end = datetime.combine(selected_date.date(), config.workday_end)
+            if previous_end < day_end:
+                gap_duration = (day_end - previous_end).total_seconds() / 3600
+                if gap_duration >= min_gap_hours:
                     gap = {
                         'start': previous_end,
-                        'end': reservation['From'],
+                        'end': day_end,
                         'duration': gap_duration
                     }
                     place_gaps.append(gap)
             
-            previous_end = reservation['To']
-        
-        # Check for gap at the end of the day
-        day_end = datetime.combine(selected_date.date(), config.workday_end)
-        if previous_end < day_end:
-            gap_duration = (day_end - previous_end).total_seconds() / 3600  # in hours
-            if gap_duration > min_gap_hours:
-                gap = {
-                    'start': previous_end,
-                    'end': day_end,
-                    'duration': gap_duration
-                }
-                place_gaps.append(gap)
-        
-        if place_gaps:  # Only add to gaps if there are any gaps longer than min_gap_hours
-            gaps[place] = place_gaps
+            if place_gaps:  # Only add to gaps if there are any gaps longer than min_gap_hours
+                gaps[place] = place_gaps
+            
+    except Exception as e:
+        print(f"Error processing reservations: {str(e)}")
+        # In case of any error, return full day availability for all places
+        for place in places:
+            start = datetime.combine(selected_date.date(), config.workday_start)
+            end = datetime.combine(selected_date.date(), config.workday_end)
+            gap = {
+                'start': start,
+                'end': end,
+                'duration': (end - start).total_seconds() / 3600  # in hours
+            }
+            gaps[place] = [gap]
     
     return gaps
 
 
 def generate_order_id(r: Reservation):
-    return f'{r.day.strftime("%Y-%m-%d")}_{r.period}h_{r.time_from.strftime("%H-%M")}_p{r.place}_{r.telegramId}'
+    return f'{r.day.strftime("%Y-%m-%d")}_{r.period}h_{r.time_from.strftime("%H-%M")}_p{r.place}_{r.telegram_id}'
 
 
 # WTF? Why here?

@@ -1,19 +1,24 @@
 from telebot.handler_backends import State, StatesGroup
-from telebot import TeleBot, types
+from telebot import TeleBot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram_bot_calendar import DetailedTelegramCalendar, WMonthTelegramCalendar, LSTEP
-from util import db, utils
+from util import utils
 import pandas as pd
-from datetime import datetime as dt
-from texts import *  # Import all texts for the screens
+from datetime import datetime as dt, time, timedelta
+from texts import *
 from classes.classes import Reservation
 from util.utils import format_reservation_recap, format_reservation_info, format_prepay
 from telegram.constants import ParseMode
-
+from db.connection import get_db
+from db.repository import ReservationRepository
 import json
 import config
+import math
 
-reservations_table = db.ReservationTable()
+
+# Initialize repository with database session
+db = next(get_db())
+reservation_repo = ReservationRepository(db)
 
 class BotStates(StatesGroup):
     state_start = State()
@@ -77,13 +82,13 @@ def show_hours(bot:TeleBot, callback):
     bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_TIME_MESSAGE, reply_markup=markup)
 
 def format_calendar(calendar, new_reservation: Reservation):
-    global reservations_table
     json_calendar = json.loads(calendar)
     calendar = InlineKeyboardMarkup(InlineKeyboardMarkup.de_json(json_calendar).keyboard)
     calendar.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
 
     # Filter the reservations_table by 'Type' first
-    filtered_by_type = reservations_table.table[reservations_table.table['Type'] == new_reservation.type]
+    reservation_df = reservation_repo.to_dataframe()
+    filtered_by_type = reservation_df[reservation_df['type'] == new_reservation.type]
 
     available_days = utils.find_available_days(new_reservation, reservation_table=filtered_by_type)
 
@@ -105,9 +110,9 @@ def format_calendar(calendar, new_reservation: Reservation):
                 
     return calendar
 
-def show_date(bot:TeleBot, callback, new_reservation):
-    global reservations_table
-    reservations_table.read_table_to_df()
+def show_date(bot:TeleBot, callback, new_reservation:Reservation):
+    # global reservations_table
+    # reservations_table_df = reservation_repo.
     calendar, step = WMonthTelegramCalendar().build()
     calendar = format_calendar(calendar, new_reservation)
 
@@ -115,27 +120,61 @@ def show_date(bot:TeleBot, callback, new_reservation):
     messageId = callback.message.message_id
     bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_DATE_MESSAGE, reply_markup=calendar)
 
-def show_time(bot:TeleBot, callback, new_reservation: Reservation, going_back=False):
-    if callback.data != 'cb_back':  # Fix this if
-        date = callback.data
-        parts = callback.data.split('_')
-        date_str = '_'.join(parts[-3:])
-        date_str = date_str.replace('_', '-')
-        date = dt.strptime(date_str, '%Y-%m-%d')
-    elif callback.data == 'cb_back':  # ???
-        date = new_reservation.time_from
-
-    timeslots = utils.generate_available_timeslots(reservations_table.table, new_reservation, date)
-
+def show_time(bot: TeleBot, callback, new_reservation: Reservation, going_back=False):
+    if callback.data != 'cb_back':
+        # Get last 3 elements and join them with '-'
+        date = dt.strptime('-'.join(callback.data.split('_')[-3:]), '%Y-%m-%d').date()
+    else:
+        date = new_reservation.time_from.date()
+    
+    # Create time slot buttons
     buttons = []
-    for timeslot, places in timeslots.items():
-        buttons.append(InlineKeyboardButton(timeslot, callback_data=f'{timeslot}_p{places}'))
+    
+    now = dt.now()
+    
+    # Calculate time_start_search only if date is today
+    if date == now.date():
+        # Add buffer minutes to current time
+        buffer_time = now + timedelta(minutes=config.time_buffer_mins)
+        # Calculate minutes since start of day
+        minutes_since_midnight = buffer_time.hour * 60 + buffer_time.minute
+        # Round up to next stride interval
+        next_slot_minutes = math.ceil(minutes_since_midnight / config.stride_mins) * config.stride_mins
+        # Convert back to datetime
+        time_start_search = dt.combine(date, time(0, 0)) + timedelta(minutes=next_slot_minutes)
+    else:
+        # If not today, start from beginning of workday
+        time_start_search = dt.combine(date, config.workday_start)
+
+    # Calculate end of workday considering reservation period
+    workday_end = dt.combine(date, config.workday_end) - timedelta(hours=new_reservation.period)
+    
+    # Generate time slots
+    current_slot = time_start_search
+    while current_slot <= workday_end:  # Changed to <= since this is now the latest start time
+        time_from = current_slot.time()
+        time_to = (current_slot + timedelta(hours=new_reservation.period)).time()
+        
+        places = reservation_repo.get_available_places_for_timeslot(
+            place_type=new_reservation.type,
+            day=date,
+            time_from=time_from,
+            time_to=time_to
+        )
+        
+        if places:
+            time_str = current_slot.strftime("%H:%M")
+            buttons.append(InlineKeyboardButton(
+                text=time_str,
+                callback_data=f'{time_str}_p{places}'
+            ))
+        
+        # Move to next slot
+        current_slot += timedelta(minutes=config.stride_mins)
 
     rows = [buttons[i:i + 4] for i in range(0, len(buttons), 4)]
-    # Create the markup
     markup = InlineKeyboardMarkup(rows)
-
-    markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
+    markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'))
 
     if going_back:
         chatId = callback.message.chat.id
@@ -215,36 +254,37 @@ def show_info(bot:TeleBot, callback):
     messageId = callback.message.message_id
     bot.edit_message_text(chat_id=chatId, message_id=messageId, text=INFO_MESSAGE, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
 
-def show_my_reservations(bot, callback):
-    reservations_table.read_table_to_df()
-    reservations_df = reservations_table.table
-    current_time = dt.now().strftime('%H:%M')
-    my_reservations_df = reservations_df[(reservations_df['TelegramId'] == callback.from_user.id) & (reservations_df['From'] > current_time)]
+def show_my_reservations(bot: TeleBot, callback):
+    # Get upcoming reservations using repository
+    my_reservations = reservation_repo.get_upcoming_reservations_by_telegram_id(str(callback.from_user.id))
+    
     markup = InlineKeyboardMarkup()
     markup.row_width = 1
 
-    reservation_message_text = ''
-
-    if len(my_reservations_df) > 0:
+    if my_reservations:
         reservation_message_text = MY_RESERVATIONS_MESSAGE
-        for index, r in my_reservations_df.iterrows():
-            markup.add(InlineKeyboardButton(f'{r["Day"].strftime("%Y-%m-%d").replace("-", ".")}  {r["From"].strftime("%H:%M")} - {r["To"].strftime("%H:%M")}', callback_data=r["OrderId"]),)
+        for r in my_reservations:
+            button_text = f'{r.day.strftime("%Y-%m-%d").replace("-", ".")} {r.time_from.strftime("%H:%M")} - {r.time_to.strftime("%H:%M")}'
+            markup.add(InlineKeyboardButton(button_text, callback_data=r.order_id))
     else:
         reservation_message_text = MY_RESERVATIONS_MESSAGE_NO_RESERVATIONS
 
-    markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
+    markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'))
 
-    chatId = callback.message.chat.id
-    messageId = callback.message.message_id
-    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_message_text, reply_markup=markup)
+    bot.edit_message_text(
+        chat_id=callback.message.chat.id,
+        message_id=callback.message.message_id,
+        text=reservation_message_text,
+        reply_markup=markup
+    )
 
-def show_my_reservation(bot:TeleBot, callback, reservations_table: db.ReservationTable):
+def show_my_reservation(bot:TeleBot, callback, reservations_table: pd.DataFrame):
     reservation_id = callback.data
-    reservation = reservations_table.table.loc[reservations_table.table['OrderId'] == reservation_id]
+    reservation = reservations_table.loc[reservations_table['order_id'] == reservation_id]
 
     markup = InlineKeyboardMarkup()
     markup.row_width = 1
-    if reservation['Payed'].values[0] == 'False':
+    if reservation['payed'].values[0] == 'False':
         markup.add(InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now'),)
 
     markup.add(
@@ -257,10 +297,10 @@ def show_my_reservation(bot:TeleBot, callback, reservations_table: db.Reservatio
 
     if not reservation.empty:
         reservation_info = format_reservation_info(
-            reservation['Day'].astype('datetime64[ns]').values[0].astype('datetime64[D]').tolist(),
-            reservation['From'].astype('datetime64[ns]').values[0].astype('datetime64[m]').tolist(),
-            reservation['To'].astype('datetime64[ns]').values[0].astype('datetime64[m]').tolist(),
-            reservation['Place'].values[0]
+            reservation['day'].astype('datetime64[ns]').values[0].astype('datetime64[D]').tolist(),
+            reservation['time_from'].astype('datetime64[ns]').values[0].astype(dt.time).tolist(),
+            reservation['time_to'].astype('datetime64[ns]').values[0].astype(dt.time).tolist(),
+            reservation['place'].values[0]
         )
         bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)
     else:
