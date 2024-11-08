@@ -264,7 +264,7 @@ def show_my_reservations(bot: TeleBot, callback):
     if my_reservations:
         reservation_message_text = MY_RESERVATIONS_MESSAGE
         for r in my_reservations:
-            button_text = f'{r.day.strftime("%Y-%m-%d").replace("-", ".")} {r.time_from.strftime("%H:%M")} - {r.time_to.strftime("%H:%M")}'
+            button_text = f'{r.day.strftime("%d.%m.%Y")}  c {r.time_from.strftime("%H:%M")} до {r.time_to.strftime("%H:%M")}'
             markup.add(InlineKeyboardButton(button_text, callback_data=r.order_id))
     else:
         reservation_message_text = MY_RESERVATIONS_MESSAGE_NO_RESERVATIONS
@@ -296,10 +296,11 @@ def show_my_reservation(bot:TeleBot, callback, reservations_table: pd.DataFrame)
     messageId = callback.message.message_id
 
     if not reservation.empty:
+        # DataFrame already contains localized times from repository
         reservation_info = format_reservation_info(
-            reservation['day'].astype('datetime64[ns]').values[0].astype('datetime64[D]').tolist(),
-            reservation['time_from'].astype('datetime64[ns]').values[0].astype(dt.time).tolist(),
-            reservation['time_to'].astype('datetime64[ns]').values[0].astype(dt.time).tolist(),
+            reservation['day'].iloc[0],
+            reservation['time_from'].iloc[0],
+            reservation['time_to'].iloc[0],
             reservation['place'].values[0]
         )
         bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)

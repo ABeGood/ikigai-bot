@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta
+from datetime import datetime, date, time, timedelta
 from classes.classes import Reservation
 import pandas as pd
 import config
+import pytz
 
 
 def find_closest_slot_start(mins_buffer):
@@ -277,10 +278,47 @@ def generate_order_id(r: Reservation):
     return f'{r.day.strftime("%Y-%m-%d")}_{r.period}h_{r.time_from.strftime("%H-%M")}_p{r.place}_{r.telegram_id}'
 
 
+def localize_from_db(dt):
+    """Convert UTC datetime from DB to local timezone"""
+    if dt is None:
+        return None
+    
+    if isinstance(dt, datetime):
+        # Convert UTC datetime to local timezone
+        if dt.tzinfo is None:
+            dt = pytz.UTC.localize(dt)
+        return dt.astimezone(pytz.timezone(config.LOCAL_TIMEZONE))
+    elif isinstance(dt, date):
+        # Only date, no timezone conversion needed
+        return dt
+    return dt
+
+def prepare_for_db(dt, day=None):
+    """Convert local time/datetime to UTC datetime for DB storage"""
+    if dt is None:
+        return None
+        
+    if isinstance(dt, datetime):
+        # If datetime has no timezone, assume it's in local timezone
+        if dt.tzinfo is None:
+            dt = pytz.timezone(config.LOCAL_TIMEZONE).localize(dt)
+        # Convert to UTC for storage
+        return dt.astimezone(pytz.UTC)
+    elif isinstance(dt, time):
+        # Convert time to datetime using the provided day or current day
+        if day is None:
+            day = date.today()
+        dt_combined = datetime.combine(day, dt)
+        if dt_combined.tzinfo is None:
+            dt_combined = pytz.timezone(config.LOCAL_TIMEZONE).localize(dt_combined)
+        return dt_combined.astimezone(pytz.UTC)
+    return dt
+
+
 # WTF? Why here?
 def format_reservation_recap(reservation: Reservation):
     return f'''*Ваша резервация:*
-*Дата:* {reservation.day.strftime('%Y-%m-%d')}
+*Дата:* {reservation.day.strftime('%d.%m.%Y')}
 *Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}
 *Стоимость*: *666* CZK
@@ -300,7 +338,7 @@ def format_prepay(sum: float):
 
 def format_reservation_confirm(reservation: Reservation):
     return f'''🎉 *Ваша резервация подтверждена и ждет оплаты!*
-*Дата:* {reservation.day.strftime('%Y-%m-%d')}
+*Дата:* {reservation.day.strftime('%d.%m.%Y')}
 *Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}
 
@@ -309,7 +347,7 @@ def format_reservation_confirm(reservation: Reservation):
 
 def format_reservation_confirm_and_payed(reservation: Reservation):
     return f'''🎉 *Ваша резервация подтверждена и оплачена!*
-*Дата:* {reservation.day.strftime('%Y-%m-%d')}
+*Дата:* {reservation.day.strftime('%d.%m.%Y')}
 *Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}
 
@@ -318,7 +356,7 @@ def format_reservation_confirm_and_payed(reservation: Reservation):
 
 def format_reservation_info(day, time_from, time_to, place):
     return f"""
-День: {day.strftime('%Y-%m-%d')}\n\
+День: {day.strftime('%d.%m.%Y')}\n\
 Время: {time_from.strftime('%H:%M')} - {time_to.strftime('%H:%M')}\n\
 Место: {place}
 """

@@ -28,8 +28,8 @@ class Reservation():
             'place': self.place,
             'period': self.period,
             'day': self.day.date() if self.day else None,
-            'time_from': self.time_from.time() if self.time_from else None,
-            'time_to': self.time_to.time() if self.time_to else None,
+            'time_from': self.time_from,
+            'time_to': self.time_to,
             'payed': self.payed
         }
 

@@ -104,11 +104,11 @@ if __name__ == '__main__':
             states.show_my_reservations(bot, call)
         elif call.data.startswith('delete_'):
             order_id = '_'.join(call.data.split('_')[1:])
-            deleted_reservation = states.reservations_table.delete_reservation(order_id)
+            deleted_reservation = states.reservation_repo.delete_reservation(order_id)
             bot.set_state(call.from_user.id, BotStates.state_my_reservation_list)
             states.show_my_reservations(bot, call)
 
-            notify_admin(f"✴️ Reservation was deleted:\n{deleted_reservation.iloc[0]['From']}\n {deleted_reservation.iloc[0]['OrderId']} \n{deleted_reservation.iloc[0]['CreationTime']}")
+            notify_admin(f"✴️ Reservation was deleted:\n{deleted_reservation['From']}\n {deleted_reservation['OrderId']} \n{deleted_reservation['CreationTime']}")
 
                 
     @bot.callback_query_handler(func=lambda call: True, state=BotStates.state_reservation_menu_type)

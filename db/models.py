@@ -1,7 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime, Time, Date
+from sqlalchemy import Column, Integer, String, DateTime, Date
 from sqlalchemy.sql import func
 from db.connection import Base
-from datetime import datetime, time
 
 class Reservation(Base):
     __tablename__ = "reservations"
@@ -13,8 +12,8 @@ class Reservation(Base):
     name = Column(String)
     type = Column(String)
     place = Column(Integer)
-    day = Column(Date, nullable=False)
-    time_from = Column(Time, nullable=False)  # TIME type
-    time_to = Column(Time, nullable=False)    # TIME type
+    day = Column(Date)
+    time_from = Column(DateTime(timezone=True))  # Changed from Time to DateTime with timezone
+    time_to = Column(DateTime(timezone=True))    # Changed from Time to DateTime with timezone
     period = Column(Integer)
     payed = Column(String)

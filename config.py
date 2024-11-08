@@ -25,4 +25,4 @@ period_buttons = {
 
 admin_chat_id = -1002217216611
 
-calendar_id = 'f7566d56975c63b9fce4e8388d92c06efc902d6a22cde645ec5792a40aca01c8@group.calendar.google.com'
+LOCAL_TIMEZONE = 'Europe/Prague'
