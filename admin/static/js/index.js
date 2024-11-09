@@ -1,6 +1,105 @@
 // Get React hooks
 const { useState, useEffect } = React;
 
+const TIMEZONE = 'Europe/Prague';
+
+const isExpired = (reservation) => {
+    const now = new Date();
+    const reservationStart = new Date(reservation.time_from);
+    return reservationStart < now;
+};
+
+// Helper functions for date/time formatting
+const formatTime = (dateString) => {
+    return new Date(dateString).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+};
+
+const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        timeZone: TIMEZONE
+    });
+};
+
+const formatDisplayDate = (date) => {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}.${month}.${year}`;
+};
+
+const StatsCard = ({ reservations, date }) => {
+    // Filter reservations for selected date and calculate stats
+    const selectedDateReservations = reservations.filter(res => {
+        const resDate = new Date(res.day);
+        return resDate.getDate() === date.getDate() &&
+            resDate.getMonth() === date.getMonth() &&
+            resDate.getFullYear() === date.getFullYear();
+    });
+
+    // Count non-expired bookings
+    const activeBookings = selectedDateReservations.filter(res => !isExpired(res)).length;
+
+    // Count and filter pending payments
+    const pendingPayments = selectedDateReservations.filter(res => (res.payed === 'No' || res.payed === 'Pending'));
+    const pendingPaymentsCount = pendingPayments.length;
+
+    return (
+        <div className="bg-white rounded-lg shadow p-6">
+            <div className="border-b pb-4 mb-4">
+                <h2 className="text-xl font-bold text-gray-700 mb-4">
+                    Overview for {formatDisplayDate(date)}
+                </h2>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <p className="text-sm text-gray-600">Active Bookings</p>
+                        <p className="text-3xl font-bold text-blue-600">{activeBookings}</p>
+                    </div>
+                    <div>
+                        <p className="text-sm text-gray-600">Pending Payments</p>
+                        <p className="text-3xl font-bold text-yellow-600">{pendingPaymentsCount}</p>
+                    </div>
+                </div>
+            </div>
+
+            {pendingPaymentsCount > 0 && (
+                <div>
+                    <h3 className="text-md font-semibold text-gray-700 mb-3">
+                        Pending Payments
+                    </h3>
+                    <div className="max-h-40 overflow-y-auto">
+                        <table className="w-full text-sm">
+                            <thead className="text-gray-600">
+                                <tr>
+                                    <th className="text-left py-2">Client</th>
+                                    <th className="text-left py-2">Time</th>
+                                    <th className="text-left py-2">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {pendingPayments.map(res => (
+                                    <tr key={res.order_id} className="border-t">
+                                        <td className="py-2">{res.name}</td>
+                                        <td className="py-2">
+                                            {formatTime(res.time_from)} - {formatTime(res.time_to)}
+                                        </td>
+                                        <td className="py-2">{res.period * 20} CZK</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const Calendar = ({ date, onDateChange }) => {
     const generateCalendarDays = () => {
@@ -77,13 +176,104 @@ const Calendar = ({ date, onDateChange }) => {
     );
 };
 
-// Helper functions for date/time formatting
-const formatTime = (dateString) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
+const TimeTable = ({ reservations, date, workdayStart = 9, workdayEnd = 21 }) => {
+    // Generate time slots
+    const timeSlots = [];
+    for (let hour = workdayStart; hour <= workdayEnd; hour++) {
+        timeSlots.push(`${String(hour).padStart(2, '0')}:00`);
+        timeSlots.push(`${String(hour).padStart(2, '0')}:30`);
+    }
+
+    // Filter reservations for selected date
+    const dayReservations = reservations.filter(res => {
+        const resDate = new Date(res.day);
+        return resDate.getDate() === date.getDate() &&
+            resDate.getMonth() === date.getMonth() &&
+            resDate.getFullYear() === date.getFullYear();
     });
+
+    // Calculate position and height for reservation blocks
+    const getReservationStyle = (reservation) => {
+        const startTime = new Date(reservation.time_from);
+        const endTime = new Date(reservation.time_to);
+
+        const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
+        const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
+        const dayStartMinutes = workdayStart * 60;
+
+        const top = ((startMinutes - dayStartMinutes) / 30) * 40; // 40px per half hour
+        const height = ((endMinutes - startMinutes) / 30) * 40;
+
+        return {
+            top: `${top}px`,
+            height: `${height}px`
+        };
+    };
+
+    return (
+        <div className="flex flex-col sm:flex-row gap-4 mt-4">
+            {/* Tabs */}
+            <div className="flex sm:hidden mb-4">
+                <button className="px-4 py-2 font-medium text-gray-600 hover:text-gray-800">List</button>
+                <button className="px-4 py-2 font-medium text-blue-600 border-b-2 border-blue-600">Timetable</button>
+            </div>
+
+            {/* Timetable */}
+            <div className="bg-white rounded-lg shadow flex-1">
+                <div className="p-4 border-b">
+                    <h3 className="text-lg font-semibold">Schedule for {formatDate(date)}</h3>
+                </div>
+                <div className="relative p-4" style={{ height: `${(workdayEnd - workdayStart + 1) * 80}px` }}>
+                    {/* Time slots */}
+                    <div className="absolute top-0 left-0 w-16 h-full border-r">
+                        {timeSlots.map((time, index) => (
+                            <div
+                                key={time}
+                                className="text-sm text-gray-600 absolute"
+                                style={{ top: `${index * 40 - 10}px` }}
+                            >
+                                {time}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Grid lines */}
+                    <div className="absolute left-16 right-0 top-0 h-full">
+                        {timeSlots.map((_, index) => (
+                            <div
+                                key={index}
+                                className="absolute w-full border-t border-gray-100"
+                                style={{ top: `${index * 40}px` }}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Reservation blocks */}
+                    <div className="absolute left-16 right-0 top-0">
+                        {dayReservations.map(reservation => {
+                            const style = getReservationStyle(reservation);
+                            const isExpired = new Date(reservation.time_to) < new Date();
+
+                            return (
+                                <div
+                                    key={reservation.order_id}
+                                    className={`absolute left-4 right-4 rounded p-2 ${isExpired ? 'bg-gray-100' :
+                                            reservation.payed === 'True' ? 'bg-green-100' : 'bg-yellow-100'
+                                        }`}
+                                    style={style}
+                                >
+                                    <div className="text-sm font-medium">{reservation.name}</div>
+                                    <div className="text-xs">
+                                        Place {reservation.place} • {reservation.type}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 const AdminDashboard = () => {
@@ -93,20 +283,15 @@ const AdminDashboard = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('all');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [viewMode, setViewMode] = useState('list'); // 'list' or 'timetable'
     const [selectedReservation, setSelectedReservation] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [showExpired, setShowExpired] = useState(false);
+    const [showExpired, setShowExpired] = useState(true);
 
     useEffect(() => {
         fetchReservations();
         fetchStats();
     }, [date]);
-
-    const isExpired = (reservation) => {
-        const now = new Date();
-        const reservationStart = new Date(reservation.time_from);
-        return reservationStart < now;
-    };
 
     const filteredReservations = reservations.filter(reservation => {
         const matchesSearch = reservation.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -121,7 +306,11 @@ const AdminDashboard = () => {
     const fetchReservations = async () => {
         setIsLoading(true);
         try {
-            const dateStr = date.toISOString().split('T')[0];
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+
             const response = await fetch(`/api/reservations?date=${dateStr}`);
             if (!response.ok) throw new Error('Failed to fetch reservations');
             const data = await response.json();
@@ -187,15 +376,10 @@ const AdminDashboard = () => {
             <div className="max-w-7xl mx-auto">
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <h2 className="text-xl font-bold text-gray-700 mb-2">Today's Bookings</h2>
-                        <p className="text-3xl font-bold text-blue-600">{stats.todayBookings}</p>
-                    </div>
-
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <h2 className="text-xl font-bold text-gray-700 mb-2">Pending Payments</h2>
-                        <p className="text-3xl font-bold text-yellow-600">{stats.pendingPayments}</p>
-                    </div>
+                    <StatsCard
+                        reservations={reservations}
+                        date={date}
+                    />
 
                     <div className="bg-white rounded-lg shadow p-6">
                         <div className="flex justify-between items-center mb-2">
@@ -217,6 +401,20 @@ const AdminDashboard = () => {
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-gray-700">Reservations</h2>
                             <div className="flex items-center gap-4">
+                                <div className="flex border rounded overflow-hidden">
+                                    <button
+                                        className={`px-4 py-2 ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-gray-600'}`}
+                                        onClick={() => setViewMode('list')}
+                                    >
+                                        List
+                                    </button>
+                                    <button
+                                        className={`px-4 py-2 ${viewMode === 'timetable' ? 'bg-blue-50 text-blue-600' : 'text-gray-600'}`}
+                                        onClick={() => setViewMode('timetable')}
+                                    >
+                                        Timetable
+                                    </button>
+                                </div>
                                 <label className="flex items-center gap-2">
                                     <input
                                         type="checkbox"
@@ -254,6 +452,7 @@ const AdminDashboard = () => {
                             <table className="w-full">
                                 <thead>
                                     <tr className="bg-gray-50">
+                                        <th className="text-left p-3 border-b">Date</th>
                                         <th className="text-left p-3 border-b">Time</th>
                                         <th className="text-left p-3 border-b">Client</th>
                                         <th className="text-left p-3 border-b">Service</th>
@@ -279,12 +478,13 @@ const AdminDashboard = () => {
                                                     key={reservation.order_id}
                                                     className={`border-b ${expired ? 'text-gray-400' : ''}`}
                                                 >
+                                                    <td className="p-3">{formatDate(reservation.time_from)}</td>
                                                     <td className="p-3">
                                                         {formatTime(reservation.time_from)} -
                                                         {formatTime(reservation.time_to)}
                                                     </td>
                                                     <td className="p-3">{reservation.name}</td>
-                                                    <td className="p-3 capitalize">{reservation.type}</td>
+                                                    <td className="p-3">{reservation.type}</td>
                                                     <td className="p-3">{reservation.place}</td>
                                                     <td className="p-3">
                                                         <span className={`px-2 py-1 rounded-full text-sm ${expired ? 'bg-gray-100 text-gray-600' :
@@ -368,6 +568,20 @@ const AdminDashboard = () => {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* View content */}
+                {viewMode === 'list' ? (
+                    <div className="overflow-x-auto">
+                        {/* ... existing table ... */}
+                    </div>
+                ) : (
+                    <TimeTable
+                        reservations={filteredReservations}
+                        date={date}
+                        workdayStart={9}
+                        workdayEnd={21}
+                    />
                 )}
             </div>
         </div>

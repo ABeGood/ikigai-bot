@@ -26,7 +26,7 @@ def delete_reservation(order_id):
     result = reservation_repo.delete_reservation(order_id)
     return {'success': result is not None}
 
-@app.route('/api/reservations/<order_id>', methods=['PUT'])
-def update_reservation(order_id):
-    # TODO: Implement update logic
-    pass
+# @app.route('/api/reservations/<order_id>', methods=['PUT'])
+# def update_reservation(order_id):
+#     # TODO: Implement update logic
+#     pass
