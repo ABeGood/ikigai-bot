@@ -28,6 +28,17 @@ class ReservationRepository:
         return db_reservation
 
 
+    def update_reservation(self, order_id: str, data: dict) -> bool:
+        reservation = self.db.query(models.Reservation)\
+                        .filter(models.Reservation.order_id == order_id)\
+                        .first()
+        if reservation:
+            for key, value in data.items():
+                setattr(reservation, key, value)
+            self.db.commit()
+            return True
+        return False
+
     def get_reservations_by_telegram_id(self, telegram_id: str):
         return self.db.query(models.Reservation)\
                     .filter(models.Reservation.telegram_id == telegram_id)\
