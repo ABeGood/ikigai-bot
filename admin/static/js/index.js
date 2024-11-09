@@ -1,6 +1,82 @@
 // Get React hooks
 const { useState, useEffect } = React;
 
+
+const Calendar = ({ date, onDateChange }) => {
+    const generateCalendarDays = () => {
+        const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
+        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+        const startDayOfWeek = firstDay.getDay() || 7; // Convert Sunday (0) to 7
+
+        const days = [];
+        // Add empty cells for days before the first day of month
+        for (let i = 1; i < startDayOfWeek; i++) {
+            days.push(<div key={`empty-${i}`} className="p-2" />);
+        }
+
+        // Add the days of the month
+        for (let day = 1; day <= lastDay.getDate(); day++) {
+            const currentDate = new Date(date.getFullYear(), date.getMonth(), day);
+            const isSelected = currentDate.getDate() === date.getDate();
+            const isToday = currentDate.toDateString() === new Date().toDateString();
+
+            days.push(
+                <button
+                    key={day}
+                    onClick={() => onDateChange(currentDate)}
+                    className={`p-2 w-full text-center rounded hover:bg-blue-50 ${isSelected ? 'bg-blue-500 text-white hover:bg-blue-600' : ''
+                        } ${isToday && !isSelected ? 'border border-blue-500' : ''}`}
+                >
+                    {day}
+                </button>
+            );
+        }
+        return days;
+    };
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <button
+                    onClick={() => {
+                        const newDate = new Date(date);
+                        newDate.setMonth(newDate.getMonth() - 1);
+                        onDateChange(newDate);
+                    }}
+                    className="p-1 hover:bg-gray-100 rounded"
+                >
+                    ←
+                </button>
+                <span className="font-semibold">
+                    {date.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                </span>
+                <button
+                    onClick={() => {
+                        const newDate = new Date(date);
+                        newDate.setMonth(newDate.getMonth() + 1);
+                        onDateChange(newDate);
+                    }}
+                    className="p-1 hover:bg-gray-100 rounded"
+                >
+                    →
+                </button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(day => (
+                    <div key={day} className="text-center text-sm font-semibold text-gray-600">
+                        {day}
+                    </div>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1">
+                {generateCalendarDays()}
+            </div>
+        </div>
+    );
+};
+
 // Helper functions for date/time formatting
 const formatTime = (dateString) => {
     return new Date(dateString).toLocaleTimeString('en-US', {
@@ -19,11 +95,28 @@ const AdminDashboard = () => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedReservation, setSelectedReservation] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [showExpired, setShowExpired] = useState(false);
 
     useEffect(() => {
         fetchReservations();
         fetchStats();
     }, [date]);
+
+    const isExpired = (reservation) => {
+        const now = new Date();
+        const reservationStart = new Date(reservation.time_from);
+        return reservationStart < now;
+    };
+
+    const filteredReservations = reservations.filter(reservation => {
+        const matchesSearch = reservation.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            reservation.order_id.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesFilter = filterType === 'all' ||
+            (filterType === 'paid' && reservation.payed === 'True') ||
+            (filterType === 'pending' && reservation.payed === 'False');
+        const matchesExpired = showExpired || !isExpired(reservation);
+        return matchesSearch && matchesFilter && matchesExpired;
+    });
 
     const fetchReservations = async () => {
         setIsLoading(true);
@@ -89,15 +182,6 @@ const AdminDashboard = () => {
         setSelectedReservation(null);
     };
 
-    const filteredReservations = reservations.filter(reservation => {
-        const matchesSearch = reservation.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            reservation.order_id.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter = filterType === 'all' ||
-            (filterType === 'paid' && reservation.payed === 'True') ||
-            (filterType === 'pending' && reservation.payed === 'False');
-        return matchesSearch && matchesFilter;
-    });
-
     return (
         <div className="min-h-screen bg-gray-50 p-4">
             <div className="max-w-7xl mx-auto">
@@ -114,20 +198,36 @@ const AdminDashboard = () => {
                     </div>
 
                     <div className="bg-white rounded-lg shadow p-6">
-                        <h2 className="text-xl font-bold text-gray-700 mb-2">Select Date</h2>
-                        <input
-                            type="date"
-                            value={date.toISOString().split('T')[0]}
-                            onChange={(e) => setDate(new Date(e.target.value))}
-                            className="w-full p-2 border border-gray-300 rounded"
-                        />
+                        <div className="flex justify-between items-center mb-2">
+                            <h2 className="text-xl font-bold text-gray-700">Select Date</h2>
+                            <button
+                                onClick={() => setDate(new Date())}
+                                className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                            >
+                                Today
+                            </button>
+                        </div>
+                        <Calendar date={date} onDateChange={setDate} />
                     </div>
                 </div>
 
                 {/* Main Content */}
                 <div className="bg-white rounded-lg shadow">
                     <div className="p-6">
-                        <h2 className="text-2xl font-bold text-gray-700 mb-6">Reservations</h2>
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-gray-700">Reservations</h2>
+                            <div className="flex items-center gap-4">
+                                <label className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={showExpired}
+                                        onChange={(e) => setShowExpired(e.target.checked)}
+                                        className="form-checkbox h-5 w-5 text-blue-600"
+                                    />
+                                    <span>Show Past Reservations</span>
+                                </label>
+                            </div>
+                        </div>
 
                         {/* Search and Filter */}
                         <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -172,39 +272,48 @@ const AdminDashboard = () => {
                                             <td colSpan={6} className="text-center p-4">No reservations found</td>
                                         </tr>
                                     ) : (
-                                        filteredReservations.map((reservation) => (
-                                            <tr key={reservation.order_id} className="border-b">
-                                                <td className="p-3">
-                                                    {formatTime(reservation.time_from)} -
-                                                    {formatTime(reservation.time_to)}
-                                                </td>
-                                                <td className="p-3">{reservation.name}</td>
-                                                <td className="p-3 capitalize">{reservation.type}</td>
-                                                <td className="p-3">{reservation.place}</td>
-                                                <td className="p-3">
-                                                    <span className={`px-2 py-1 rounded-full text-sm ${reservation.payed === 'True'
-                                                            ? 'bg-green-100 text-green-800'
-                                                            : 'bg-yellow-100 text-yellow-800'
-                                                        }`}>
-                                                        {reservation.payed === 'True' ? 'Paid' : 'Pending'}
-                                                    </span>
-                                                </td>
-                                                <td className="p-3">
-                                                    <button
-                                                        onClick={() => handleEdit(reservation)}
-                                                        className="px-3 py-1 mr-2 bg-blue-100 text-blue-600 rounded"
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(reservation.order_id)}
-                                                        className="px-3 py-1 bg-red-100 text-red-600 rounded"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
+                                        filteredReservations.map((reservation) => {
+                                            const expired = isExpired(reservation);
+                                            return (
+                                                <tr
+                                                    key={reservation.order_id}
+                                                    className={`border-b ${expired ? 'text-gray-400' : ''}`}
+                                                >
+                                                    <td className="p-3">
+                                                        {formatTime(reservation.time_from)} -
+                                                        {formatTime(reservation.time_to)}
+                                                    </td>
+                                                    <td className="p-3">{reservation.name}</td>
+                                                    <td className="p-3 capitalize">{reservation.type}</td>
+                                                    <td className="p-3">{reservation.place}</td>
+                                                    <td className="p-3">
+                                                        <span className={`px-2 py-1 rounded-full text-sm ${expired ? 'bg-gray-100 text-gray-600' :
+                                                                reservation.payed === 'True' ? 'bg-green-100 text-green-800' :
+                                                                    'bg-yellow-100 text-yellow-800'
+                                                            }`}>
+                                                            {expired ? 'Expired' :
+                                                                reservation.payed === 'True' ? 'Paid' : 'Pending'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <button
+                                                            onClick={() => handleEdit(reservation)}
+                                                            className={`px-3 py-1 mr-2 rounded ${expired ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-600'
+                                                                }`}
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(reservation.order_id)}
+                                                            className={`px-3 py-1 rounded ${expired ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-600'
+                                                                }`}
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
                                     )}
                                 </tbody>
                             </table>
