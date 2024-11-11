@@ -14,7 +14,8 @@ const formatTime = (dateString) => {
     return new Date(dateString).toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
-        hour12: false
+        hour12: false,
+        timeZone: TIMEZONE
     });
 };
 
@@ -176,100 +177,114 @@ const Calendar = ({ date, onDateChange }) => {
     );
 };
 
-const TimeTable = ({ reservations, date, workdayStart = 9, workdayEnd = 21 }) => {
+const ResourceTimeline = ({ reservations, date, workdayStart = 9, workdayEnd = 21 }) => {
+    // Get unique places from reservations
+    const places = [...new Set(reservations.map(res => res.place))].sort((a, b) => a - b);
+
     // Generate time slots
     const timeSlots = [];
     for (let hour = workdayStart; hour <= workdayEnd; hour++) {
         timeSlots.push(`${String(hour).padStart(2, '0')}:00`);
         timeSlots.push(`${String(hour).padStart(2, '0')}:30`);
     }
+    timeSlots.pop()
 
-    // Filter reservations for selected date
-    const dayReservations = reservations.filter(res => {
-        const resDate = new Date(res.day);
-        return resDate.getDate() === date.getDate() &&
-            resDate.getMonth() === date.getMonth() &&
-            resDate.getFullYear() === date.getFullYear();
-    });
-
-    // Calculate position and height for reservation blocks
     const getReservationStyle = (reservation) => {
+        // Parse ISO timestamps and extract hours and minutes
         const startTime = new Date(reservation.time_from);
         const endTime = new Date(reservation.time_to);
 
-        const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
-        const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
-        const dayStartMinutes = workdayStart * 60;
+        // Calculate total minutes from start of day for each time
+        const startTimeInMinutes = startTime.getUTCHours() * 60 + startTime.getUTCMinutes();
+        const endTimeInMinutes = endTime.getUTCHours() * 60 + endTime.getUTCMinutes();
 
-        const top = ((startMinutes - dayStartMinutes) / 30) * 40; // 40px per half hour
-        const height = ((endMinutes - startMinutes) / 30) * 40;
+        // Calculate the total working day minutes
+        const dayStartMinutes = workdayStart * 60;
+        const dayEndMinutes = workdayEnd * 60;
+        const totalDayMinutes = dayEndMinutes - dayStartMinutes;
+
+        // Calculate position and width as percentages
+        const left = ((startTimeInMinutes - dayStartMinutes) / totalDayMinutes) * 100;
+        const width = ((endTimeInMinutes - startTimeInMinutes) / totalDayMinutes) * 100;
 
         return {
-            top: `${top}px`,
-            height: `${height}px`
+            left: `${left}%`,
+            width: `${width}%`
         };
     };
 
     return (
-        <div className="flex flex-col sm:flex-row gap-4 mt-4">
-            {/* Tabs */}
-            <div className="flex sm:hidden mb-4">
-                <button className="px-4 py-2 font-medium text-gray-600 hover:text-gray-800">List</button>
-                <button className="px-4 py-2 font-medium text-blue-600 border-b-2 border-blue-600">Timetable</button>
+        <div className="bg-white rounded-lg shadow flex-1 overflow-x-auto">
+            <div className="p-4 border-b">
+                <h3 className="text-lg font-semibold">Resource Timeline for {formatDate(date)}</h3>
             </div>
 
-            {/* Timetable */}
-            <div className="bg-white rounded-lg shadow flex-1">
-                <div className="p-4 border-b">
-                    <h3 className="text-lg font-semibold">Schedule for {formatDate(date)}</h3>
-                </div>
-                <div className="relative p-4" style={{ height: `${(workdayEnd - workdayStart + 1) * 80}px` }}>
-                    {/* Time slots */}
-                    <div className="absolute top-0 left-0 w-16 h-full border-r">
+            <div className="p-4">
+                {/* Timeline header */}
+                <div className="flex border-b mb-4">
+                    <div className="w-24 flex-shrink-0" /> {/* Space for place labels */}
+                    <div className="flex-1 relative h-8">
                         {timeSlots.map((time, index) => (
                             <div
                                 key={time}
-                                className="text-sm text-gray-600 absolute"
-                                style={{ top: `${index * 40 - 10}px` }}
+                                className="absolute text-sm text-gray-600"
+                                style={{
+                                    left: `${(index / (timeSlots.length - 1)) * 100}%`,
+                                    transform: 'translateX(-50%)'
+                                }}
                             >
                                 {time}
                             </div>
                         ))}
                     </div>
+                </div>
 
-                    {/* Grid lines */}
-                    <div className="absolute left-16 right-0 top-0 h-full">
-                        {timeSlots.map((_, index) => (
-                            <div
-                                key={index}
-                                className="absolute w-full border-t border-gray-100"
-                                style={{ top: `${index * 40}px` }}
-                            />
-                        ))}
-                    </div>
+                {/* Resource rows */}
+                <div className="space-y-4">
+                    {places.map(place => (
+                        <div key={place} className="flex items-center">
+                            <div className="w-24 flex-shrink-0 font-medium text-gray-700">
+                                Place {place}
+                            </div>
+                            <div className="flex-1 relative h-16 bg-gray-50 rounded">
+                                {/* Time grid lines */}
+                                {timeSlots.map((_, index) => (
+                                    <div
+                                        key={index}
+                                        className="absolute h-full border-l border-gray-200"
+                                        style={{
+                                            left: `${(index / (timeSlots.length - 1)) * 100}%`
+                                        }}
+                                    />
+                                ))}
 
-                    {/* Reservation blocks */}
-                    <div className="absolute left-16 right-0 top-0">
-                        {dayReservations.map(reservation => {
-                            const style = getReservationStyle(reservation);
-                            const isExpired = new Date(reservation.time_to) < new Date();
+                                {/* Reservation blocks */}
+                                {reservations
+                                    .filter(res => res.place === place)
+                                    .map(reservation => {
+                                        const style = getReservationStyle(reservation);
+                                        const isExpired = new Date(reservation.time_to) < new Date();
 
-                            return (
-                                <div
-                                    key={reservation.order_id}
-                                    className={`absolute left-4 right-4 rounded p-2 ${isExpired ? 'bg-gray-100' :
-                                            reservation.payed === 'True' ? 'bg-green-100' : 'bg-yellow-100'
-                                        }`}
-                                    style={style}
-                                >
-                                    <div className="text-sm font-medium">{reservation.name}</div>
-                                    <div className="text-xs">
-                                        Place {reservation.place} • {reservation.type}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                        return (
+                                            <div
+                                                key={reservation.order_id}
+                                                className={`absolute top-1 bottom-1 rounded-lg shadow-sm p-2 ${isExpired ? 'bg-gray-300' :
+                                                        reservation.payed === 'True' ? 'bg-green-100' : 'bg-yellow-100'
+                                                    }`}
+                                                style={style}
+                                            >
+                                                <div className="text-xs font-medium truncate">
+                                                    {reservation.name}
+                                                </div>
+                                                <div className="text-xs truncate">
+                                                    {reservation.type}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
@@ -576,7 +591,7 @@ const AdminDashboard = () => {
                         {/* ... existing table ... */}
                     </div>
                 ) : (
-                    <TimeTable
+                    <ResourceTimeline
                         reservations={filteredReservations}
                         date={date}
                         workdayStart={9}
