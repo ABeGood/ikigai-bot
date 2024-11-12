@@ -301,7 +301,7 @@ def prepare_for_db(dt, day=None):
     if isinstance(dt, datetime):
         # If datetime has no timezone, assume it's in local timezone
         if dt.tzinfo is None:
-            dt = pytz.timezone(config.LOCAL_TIMEZONE).localize(dt)
+            dt = pytz.timezone('UTC').localize(dt)
         # Convert to UTC for storage
         return dt.astimezone(pytz.UTC)
     elif isinstance(dt, time):
@@ -310,7 +310,7 @@ def prepare_for_db(dt, day=None):
             day = date.today()
         dt_combined = datetime.combine(day, dt)
         if dt_combined.tzinfo is None:
-            dt_combined = pytz.timezone(config.LOCAL_TIMEZONE).localize(dt_combined)
+            dt_combined = pytz.timezone('UTC').localize(dt_combined)
         return dt_combined.astimezone(pytz.UTC)
     return dt
 

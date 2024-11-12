@@ -29,7 +29,6 @@ from classes.classes import Reservation
 import ast
 
 from config import *
-# from keys import token
 from texts import *
 
 load_dotenv()
@@ -68,7 +67,7 @@ if __name__ == '__main__':
     def callback_query(call):
         global new_reservation
         if call.data == "cb_new_reservation":
-            new_reservation = Reservation(telegramId=call.from_user.id, name=call.from_user.full_name)  # TODO: full_name
+            new_reservation = Reservation(telegramId=call.from_user.id, name=f'{call.from_user.full_name} ({call.from_user.username})')
             bot.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
             states.show_reservation_type(bot, call)
         elif call.data == 'cb_my_reservations':

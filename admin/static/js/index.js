@@ -177,7 +177,7 @@ const Calendar = ({ date, onDateChange }) => {
     );
 };
 
-const ResourceTimeline = ({ reservations, date, workdayStart = 9, workdayEnd = 21 }) => {
+const ResourceTimeline = ({ reservations, date, workdayStart = 9, workdayEnd = 21, onReservationClick = () => {} }) => {
     // Get unique places from reservations
     const places = [...new Set(reservations.map(res => res.place))].sort((a, b) => a - b);
 
@@ -268,10 +268,12 @@ const ResourceTimeline = ({ reservations, date, workdayStart = 9, workdayEnd = 2
                                         return (
                                             <div
                                                 key={reservation.order_id}
-                                                className={`absolute top-1 bottom-1 rounded-lg shadow-sm p-2 ${isExpired ? 'bg-gray-300' :
-                                                        reservation.payed === 'True' ? 'bg-green-100' : 'bg-yellow-100'
-                                                    }`}
+                                                className={`absolute top-1 bottom-1 rounded-lg shadow-sm p-2 border-2 
+                                                    ${isExpired ? 'bg-gray-100 border-gray-500' :
+                                                    reservation.payed === 'True' ? 'bg-green-100 border-green-500' : 'bg-yellow-100 border-yellow-500'} 
+                                                    cursor-pointer hover:opacity-75 transition-opacity`}
                                                 style={style}
+                                                onClick={() => onReservationClick(reservation)} // Add click handler
                                             >
                                                 <div className="text-xs font-medium truncate">
                                                     {reservation.name}
@@ -298,7 +300,7 @@ const AdminDashboard = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('all');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [viewMode, setViewMode] = useState('list'); // 'list' or 'timetable'
+    const [viewMode, setViewMode] = useState('timetable'); // 'list' or 'timetable'
     const [selectedReservation, setSelectedReservation] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [showExpired, setShowExpired] = useState(true);
@@ -462,77 +464,79 @@ const AdminDashboard = () => {
                             </select>
                         </div>
 
-                        {/* Table */}
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="bg-gray-50">
-                                        <th className="text-left p-3 border-b">Date</th>
-                                        <th className="text-left p-3 border-b">Time</th>
-                                        <th className="text-left p-3 border-b">Client</th>
-                                        <th className="text-left p-3 border-b">Service</th>
-                                        <th className="text-left p-3 border-b">Place</th>
-                                        <th className="text-left p-3 border-b">Status</th>
-                                        <th className="text-left p-3 border-b">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {isLoading ? (
-                                        <tr>
-                                            <td colSpan={6} className="text-center p-4">Loading...</td>
+                        {/* Conditional rendering of Table or Timeline */}
+                        {viewMode === 'list' ? (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="bg-gray-50">
+                                            <th className="text-left p-3 border-b">Date</th>
+                                            <th className="text-left p-3 border-b">Time</th>
+                                            <th className="text-left p-3 border-b">Client</th>
+                                            <th className="text-left p-3 border-b">Service</th>
+                                            <th className="text-left p-3 border-b">Place</th>
+                                            <th className="text-left p-3 border-b">Status</th>
+                                            <th className="text-left p-3 border-b">Actions</th>
                                         </tr>
-                                    ) : filteredReservations.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={6} className="text-center p-4">No reservations found</td>
-                                        </tr>
-                                    ) : (
-                                        filteredReservations.map((reservation) => {
-                                            const expired = isExpired(reservation);
-                                            return (
-                                                <tr
-                                                    key={reservation.order_id}
-                                                    className={`border-b ${expired ? 'text-gray-400' : ''}`}
-                                                >
-                                                    <td className="p-3">{formatDate(reservation.time_from)}</td>
-                                                    <td className="p-3">
-                                                        {formatTime(reservation.time_from)} -
-                                                        {formatTime(reservation.time_to)}
-                                                    </td>
-                                                    <td className="p-3">{reservation.name}</td>
-                                                    <td className="p-3">{reservation.type}</td>
-                                                    <td className="p-3">{reservation.place}</td>
-                                                    <td className="p-3">
-                                                        <span className={`px-2 py-1 rounded-full text-sm ${expired ? 'bg-gray-100 text-gray-600' :
-                                                                reservation.payed === 'True' ? 'bg-green-100 text-green-800' :
-                                                                    'bg-yellow-100 text-yellow-800'
-                                                            }`}>
-                                                            {expired ? 'Expired' :
-                                                                reservation.payed === 'True' ? 'Paid' : 'Pending'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-3">
-                                                        <button
-                                                            onClick={() => handleEdit(reservation)}
-                                                            className={`px-3 py-1 mr-2 rounded ${expired ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-600'
-                                                                }`}
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(reservation.order_id)}
-                                                            className={`px-3 py-1 rounded ${expired ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-600'
-                                                                }`}
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        {isLoading ? (
+                                            <tr>
+                                                <td colSpan={7} className="text-center p-4">Loading...</td>
+                                            </tr>
+                                        ) : filteredReservations.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={7} className="text-center p-4">No reservations found</td>
+                                            </tr>
+                                        ) : (
+                                            filteredReservations.map((reservation) => {
+                                                const expired = isExpired(reservation);
+                                                return (
+                                                    <tr
+                                                        key={reservation.order_id}
+                                                        className={`border-b ${expired ? 'text-gray-400' : ''}`}
+                                                    >
+                                                        <td className="p-3">{formatDate(reservation.time_from)}</td>
+                                                        <td className="p-3">
+                                                            {formatTime(reservation.time_from)} -
+                                                            {formatTime(reservation.time_to)}
+                                                        </td>
+                                                        <td className="p-3">{reservation.name}</td>
+                                                        <td className="p-3">{reservation.type}</td>
+                                                        <td className="p-3">{reservation.place}</td>
+                                                        <td className="p-3">
+                                                            <span className={`px-2 py-1 rounded-full text-sm ${expired ? 'bg-gray-100 text-gray-600' :
+                                                                    reservation.payed === 'True' ? 'bg-green-100 text-green-800' :
+                                                                        'bg-yellow-100 text-yellow-800'
+                                                                }`}>
+                                                                {expired ? 'Expired' :
+                                                                    reservation.payed === 'True' ? 'Paid' : 'Pending'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3">
+                                                            <button
+                                                                onClick={() => handleEdit(reservation)}
+                                                                className={`px-3 py-1 rounded ${expired ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-600'}`}
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <ResourceTimeline
+                                reservations={filteredReservations}
+                                date={date}
+                                workdayStart={9}
+                                workdayEnd={21}
+                                onReservationClick={handleEdit}
+                            />
+                        )}
                     </div>
                 </div>
 
@@ -567,36 +571,35 @@ const AdminDashboard = () => {
                                     <option value="False">Pending</option>
                                 </select>
                             </div>
-                            <div className="flex justify-end gap-2">
+                            <div className="flex justify-between items-center">
                                 <button
-                                    onClick={handleCloseModal}
-                                    className="px-4 py-2 bg-gray-200 rounded"
+                                    onClick={() => {
+                                        if (window.confirm('Are you sure you want to delete this reservation?')) {
+                                            handleDelete(selectedReservation.order_id);
+                                            handleCloseModal();
+                                        }
+                                    }}
+                                    className="px-4 py-2 bg-red-100 text-red-600 rounded hover:bg-red-200"
                                 >
-                                    Cancel
+                                    Delete Reservation
                                 </button>
-                                <button
-                                    onClick={handleSave}
-                                    className="px-4 py-2 bg-blue-500 text-white rounded"
-                                >
-                                    Save changes
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleCloseModal}
+                                        className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSave}
+                                        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                                    >
+                                        Save changes
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                )}
-
-                {/* View content */}
-                {viewMode === 'list' ? (
-                    <div className="overflow-x-auto">
-                        {/* ... existing table ... */}
-                    </div>
-                ) : (
-                    <ResourceTimeline
-                        reservations={filteredReservations}
-                        date={date}
-                        workdayStart={9}
-                        workdayEnd={21}
-                    />
                 )}
             </div>
         </div>

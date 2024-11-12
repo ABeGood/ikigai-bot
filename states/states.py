@@ -151,7 +151,7 @@ def show_time(bot: TeleBot, callback, new_reservation: Reservation, going_back=F
     
     # Generate time slots
     current_slot = time_start_search
-    while current_slot <= workday_end:  # Changed to <= since this is now the latest start time
+    while current_slot <= workday_end:  # WTF?
         time_from = current_slot.time()
         time_to = (current_slot + timedelta(hours=new_reservation.period)).time()
         

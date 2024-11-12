@@ -23,9 +23,14 @@ class ReservationRepository:
         
         db_reservation = models.Reservation(**reservation_dict)
         self.db.add(db_reservation)
-        self.db.commit()
-        self.db.refresh(db_reservation)
-        return db_reservation
+        try:
+            self.db.commit()
+            self.db.refresh(db_reservation)
+            return db_reservation
+        except:
+            self.db.rollback()
+            return None
+        
 
 
     def update_reservation(self, order_id: str, data: dict) -> bool:
@@ -35,8 +40,11 @@ class ReservationRepository:
         if reservation:
             for key, value in data.items():
                 setattr(reservation, key, value)
-            self.db.commit()
-            return True
+            try:
+                self.db.commit()
+                return True
+            except:
+                self.db.rollback()
         return False
 
     def get_reservations_by_telegram_id(self, telegram_id: str):
@@ -94,9 +102,12 @@ class ReservationRepository:
             }
 
             self.db.delete(reservation)
-            self.db.commit()
-            deleted_reservation['From'] = localize_from_db(deleted_reservation['From'])
-            return deleted_reservation
+            try:
+                self.db.commit()
+                deleted_reservation['From'] = localize_from_db(deleted_reservation['From'])
+                return deleted_reservation
+            except:
+                self.db.rollback()
         return None
 
     def get_reservations_by_type_and_date_range(self, reservation_type: str, start_date: date, end_date: date):
