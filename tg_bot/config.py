@@ -24,5 +24,4 @@ period_buttons = {
 }
 
 admin_chat_id = -1002217216611
-
 LOCAL_TIMEZONE = 'Europe/Prague'

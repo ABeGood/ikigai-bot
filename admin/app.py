@@ -1,14 +1,13 @@
 from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 from datetime import datetime
+from db.connection import Database
 import sys
 import os
 
 # Add project root to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from db.connection import get_db
-from db.repository import ReservationRepository
 
 app = Flask(__name__, 
     static_folder='static',
@@ -17,8 +16,7 @@ app = Flask(__name__,
 CORS(app)
 
 # Get database session
-db = next(get_db())
-reservation_repo = ReservationRepository(db)
+reservation_repo = Database()
 
 @app.route('/')
 def index():

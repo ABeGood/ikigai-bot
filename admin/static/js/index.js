@@ -1,7 +1,7 @@
 // Get React hooks
 const { useState, useEffect } = React;
 
-const TIMEZONE = 'Europe/Prague';
+const TIMEZONE = 'UTC';
 
 const isExpired = (reservation) => {
     const now = new Date();
