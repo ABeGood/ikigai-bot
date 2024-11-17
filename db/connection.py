@@ -69,14 +69,14 @@ class Database:
         self.engine = self._create_engine()
         self.SessionLocal = self._create_session_factory()
         self._setup_engine_events()
-        
+
     def _create_engine(self) -> Engine:
         return create_engine(
             self.config.database_url,
             poolclass=QueuePool,
             **self.config.pool_settings
         )
-    
+
     def _create_session_factory(self) -> sessionmaker:
         return sessionmaker(
             bind=self.engine,
@@ -84,7 +84,7 @@ class Database:
             autoflush=False,
             expire_on_commit=False
         )
-    
+
     def _setup_engine_events(self):
         @event.listens_for(self.engine, "connect")
         def connect(dbapi_connection, connection_record):
@@ -102,7 +102,7 @@ class Database:
         except Exception as e:
             logger.error(f"Error finding available days: {str(e)}")
             return []
-        
+
     def get_upcoming_reservations_by_telegram_id(self, telegram_id: str) -> List[models.Reservation]:
         """
         Get all upcoming reservations for a specific telegram user id.
@@ -143,7 +143,7 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting upcoming reservations: {str(e)}")
             return []
-        
+
     def get_reservations_for_date(self, target_date: date) -> List[models.Reservation]:
         """
         Get all reservations for a specific date.
@@ -171,7 +171,6 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting reservations for date {target_date}: {str(e)}")
             return []
-        
 
     def get_available_timeslots(self, new_reservation: 'Reservation') -> dict[str, list[int]]:
         """
@@ -364,12 +363,6 @@ class Database:
         """
         try:
             with self.get_db() as session:
-                # Generate order_id if not provided
-                if not reservation.order_id:
-                    day_str = reservation.day.strftime("%Y-%m-%d")
-                    time_str = reservation.time_from.strftime("%H-%M")
-                    reservation.order_id = f'{day_str}_{reservation.period}h_{time_str}_p{reservation.place}_{reservation.telegram_id}'
-
                 # Convert reservation to dict
                 reservation_data = reservation.to_dict()
                 
@@ -383,8 +376,10 @@ class Database:
                     day=reservation_data['day'],
                     time_from=self.localize_datetime(reservation_data['time_from']),
                     time_to=self.localize_datetime(reservation_data['time_to']),
-                    period=reservation_data['period'],
-                    payed=reservation_data.get('payed', 'False')  # Default to unpaid
+                    period=float(reservation_data['period']),  # Ensure period is float
+                    sum=reservation_data['sum'],
+                    payed=reservation_data.get('payed', False),
+                    payment_confiramtion_link=reservation_data.get('payment_confiramtion_link')
                 )
                 
                 # Validate time slots are available

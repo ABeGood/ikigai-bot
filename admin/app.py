@@ -57,7 +57,8 @@ def get_reservations():
                 'time_from': res.time_from.isoformat() if res.time_from else None,
                 'time_to': res.time_to.isoformat() if res.time_to else None,
                 'period': res.period,
-                'payed': res.payed
+                'sum' : res.sum,
+                'payed': res.payed,
             })
         return jsonify(reservations_list)
     else:

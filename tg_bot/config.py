@@ -13,6 +13,7 @@ workday_start = datetime.time(9, 0)
 workday_end = datetime.time(21, 0)
 
 places : Dict[str, Tuple[int, ...]] = {'b': (1, 2, 3), 'h': (1, 2)}
+prices = {'h': 250, 'b': 250}
 
 period_buttons = {
     'hour_1': (1, '🕐 1 час'),

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Date
+from sqlalchemy import Column, Integer, Float, Boolean, String, DateTime, Date
 from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -12,8 +12,10 @@ class Reservation(declarative_base()):
     name = Column(String)
     type = Column(String)
     place = Column(Integer)
+    period = Column(Float)
     day = Column(Date)
     time_from = Column(DateTime(timezone=True))  # Changed from Time to DateTime with timezone
     time_to = Column(DateTime(timezone=True))    # Changed from Time to DateTime with timezone
-    period = Column(Integer)
-    payed = Column(String)
+    sum = Column(Float)
+    payed = Column(Boolean)
+    payment_confiramtion_link = Column(String)

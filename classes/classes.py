@@ -7,17 +7,28 @@ class Reservation():
     name : str
     type : str
     place : int
-    period : int
+    period : float
     day : datetime
     time_from : datetime
     time_to : datetime
-    payed : str
+    sum : float
+    payed : bool
+    payment_confiramtion_link : str
     available_places : list[int]
 
     def __init__(self, telegramId:str, name:str) -> None:
+        self.order_id = None
         self.telegram_id = telegramId
         self.name = name
-        self.order_id = None
+        self.type = None
+        self.place = None
+        self.period = None
+        self.day = None
+        self.time_from = None
+        self.time_to = None
+        self.sum = None
+        self.payed = None
+        self.payment_confiramtion_link = None
 
     def to_dict(self) -> dict:
         return {
@@ -30,7 +41,9 @@ class Reservation():
             'day': self.day.date() if self.day else None,
             'time_from': self.time_from,
             'time_to': self.time_to,
-            'payed': self.payed
+            'sum': self.sum,
+            'payed': self.payed,
+            'payment_confiramtion_link': self.payment_confiramtion_link,
         }
 
 

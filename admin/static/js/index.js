@@ -48,7 +48,7 @@ const StatsCard = ({ reservations, date }) => {
     const activeBookings = selectedDateReservations.filter(res => !isExpired(res)).length;
 
     // Count and filter pending payments
-    const pendingPayments = selectedDateReservations.filter(res => (res.payed === 'No' || res.payed === 'Pending'));
+    const pendingPayments = selectedDateReservations.filter(res => (res.payed === false));
     const pendingPaymentsCount = pendingPayments.length;
 
     return (
@@ -90,7 +90,7 @@ const StatsCard = ({ reservations, date }) => {
                                         <td className="py-2">
                                             {formatTime(res.time_from)} - {formatTime(res.time_to)}
                                         </td>
-                                        <td className="py-2">{res.period * 20} CZK</td>
+                                        <td className="py-2">{res.sum} CZK</td>
                                     </tr>
                                 ))}
                             </tbody>

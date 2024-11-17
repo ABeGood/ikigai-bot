@@ -38,130 +38,6 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-def show_main_menu(bot:TeleBot, message):
-    markup = InlineKeyboardMarkup()
-    markup.row_width = 2
-    markup.add(
-        InlineKeyboardButton(NEW_RESERVATION_BUTTON, callback_data='cb_new_reservation'),
-        InlineKeyboardButton(MY_RESERVATIONS_BUTTON, callback_data='cb_my_reservations'),
-        InlineKeyboardButton(ABOUT_US_BUTTON, callback_data='cb_info')
-    )
-    bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-    bot.send_message(message.chat.id, WELCOME_MESSAGE, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-
-def show_reservation_type(bot:TeleBot, callback):
-    markup = InlineKeyboardMarkup()
-    markup.row_width = 2
-    markup.add(
-        InlineKeyboardButton(HAIRSTYLE_BUTTON, callback_data='hairstyle'),
-        InlineKeyboardButton(BROWS_BUTTON, callback_data='brows'),
-        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
-    )
-
-    chatId = callback.message.chat.id
-    messageId = callback.message.message_id
-    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_WORKPLACE_MESSAGE, reply_markup=markup)
-
-def show_hours(bot:TeleBot, callback):
-    markup = InlineKeyboardMarkup()
-    markup.row_width = 1
-    markup.add(
-        InlineKeyboardButton(config.period_buttons.get('hour_1')[1], callback_data=str(config.period_buttons.get('hour_1')[0])),
-        InlineKeyboardButton(config.period_buttons.get('hour_3')[1], callback_data=str(config.period_buttons.get('hour_3')[0])),
-        InlineKeyboardButton(config.period_buttons.get('day_1')[1], callback_data=str(config.period_buttons.get('day_1')[0])),
-        # InlineKeyboardButton(config.period_buttons.get('day_7')[1], callback_data=str(config.period_buttons.get('day_7')[0])),
-        InlineKeyboardButton(config.period_buttons.get('other')[1], callback_data=str(config.period_buttons.get('other')[0])),
-        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
-    )
-
-    chatId = callback.message.chat.id
-    messageId = callback.message.message_id
-    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_TIME_MESSAGE, reply_markup=markup)
-
-
-def show_place(bot:TeleBot, callback, new_reservation: Reservation):
-    markup = InlineKeyboardMarkup()
-    markup.row_width = 4
-    for place in new_reservation.available_places:
-        markup.add(InlineKeyboardButton(f'Место {place}', callback_data=f'place_{place}'),)
-
-    markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
-
-    chatId = callback.message.chat.id
-    messageId = callback.message.message_id
-    bot.delete_message(chat_id=chatId, message_id=messageId)
-    bot.send_photo(chat_id=chatId, caption=SELECT_SEAT_MESSAGE, photo=open('img/seats/places_all.jpg', 'rb'), reply_markup=markup)
-
-def show_recap(bot:TeleBot, callback, new_reservation: Reservation):
-    markup = InlineKeyboardMarkup()
-    markup.row_width = 1
-    markup.add(
-        InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now'),
-        InlineKeyboardButton(PAY_LATER_BUTTON, callback_data='pay_later'),
-        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
-    )
-    
-    img_path = f'img/seats/places_{new_reservation.place}.jpg'
-
-    recap_string = format_reservation_recap(new_reservation)
-
-    chatId = callback.message.chat.id
-    messageId = callback.message.message_id
-    bot.delete_message(chat_id=chatId, message_id=messageId)
-    bot.send_photo(callback.message.chat.id, caption=recap_string, photo=open(img_path, 'rb'), reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-    
-def show_info(bot:TeleBot, callback):
-    markup = InlineKeyboardMarkup()
-    markup.row_width = 1
-    markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
-
-    chatId = callback.message.chat.id
-    messageId = callback.message.message_id
-    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=INFO_MESSAGE, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-
-
-
-def show_my_reservation(bot:TeleBot, callback, reservations_table: pd.DataFrame):
-    reservation_id = callback.data
-    reservation = reservations_table.loc[reservations_table['order_id'] == reservation_id]
-
-    markup = InlineKeyboardMarkup()
-    markup.row_width = 1
-    if reservation['payed'].values[0] == 'False':
-        markup.add(InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now'),)
-
-    markup.add(
-        InlineKeyboardButton(CANCEL_RESERVATION_BUTTON, callback_data=f'delete_{reservation_id}'),
-        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
-    )
-    
-    chatId = callback.message.chat.id
-    messageId = callback.message.message_id
-
-    if not reservation.empty:
-        # DataFrame already contains localized times from repository
-        reservation_info = format_reservation_info(
-            reservation['day'].iloc[0],
-            reservation['time_from'].iloc[0],
-            reservation['time_to'].iloc[0],
-            reservation['place'].values[0]
-        )
-        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)
-    else:
-        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=RESERVATION_NOT_FOUND_MESSAGE)
-
-def show_admin_chat(bot:TeleBot, callback):
-    markup = InlineKeyboardMarkup()
-    markup.row_width = 1
-    markup.add(
-        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
-    )
-
-    chatId = callback.message.chat.id
-    messageId = callback.message.message_id
-    bot.edit_message_text(chat_id=chatId, message_id=messageId, text=ADMIN_CHAT_MESSAGE, reply_markup=markup)
-
-
 class TelegramBot:
     state_storage : StateMemoryStorage
     reservations_db : Database
@@ -227,8 +103,6 @@ class TelegramBot:
                     reply_markup=markup
                 )
 
-        # Add other handlers here
-
     def register_callback_handlers(self):
         """Register all callback query handlers"""
         # Main menu callbacks
@@ -247,7 +121,7 @@ class TelegramBot:
         self.bot.callback_query_handler(
             func=lambda call: True, 
             state=BotStates.state_my_reservation_list
-        )(self.callback_in_my_reservation_list)
+        )(self.callback_in_my_reservations)
 
         # Info state callbacks
         self.bot.callback_query_handler(
@@ -264,7 +138,7 @@ class TelegramBot:
         self.bot.callback_query_handler(
             func=lambda call: True, 
             state=BotStates.state_reservation_menu_hours
-        )(self.callback_in_state_reservation_menu_hours)
+        )(self.callback_in_reservation_menu_hours)
 
         self.bot.callback_query_handler(
             func=lambda call: True, 
@@ -294,22 +168,19 @@ class TelegramBot:
         self.bot.callback_query_handler(
             func=lambda call: True, 
             state=BotStates.state_reservation_menu_recap
-        )(self.callback_in_reservation_menu_recap)
+        )(self.callback_in_reservation_menu_recap)  
 
-        
-        
-        
 
     def start(self, message):
         chat_id = message.chat.id
         self.bot.set_state(user_id=message.from_user.id, state=BotStates.state_main_menu)
-        show_main_menu(self.bot, message)
-
+        self.show_main_menu(self.bot, message)
 
     def admin(self, message):
         chat_id = message.chat.id
         self.bot.send_message(chat_id = chat_id, text='Hello')
     
+
     def show_my_reservations(self, callback):
         """
         Display user's upcoming reservations with interactive buttons
@@ -353,35 +224,84 @@ class TelegramBot:
                 reply_markup=markup
             )
 
+    def callback_in_my_reservations(self, call):
+        if call.data == 'cb_back':
+            self.bot.set_state(call.from_user.id, BotStates.state_main_menu)
+            self.show_main_menu(self.bot, call.message)
+        else:
+            self.bot.set_state(call.from_user.id, BotStates.state_my_reservation)
+            reservation_table = self.reservations_db.to_dataframe()
+            self.show_my_reservation(self.bot, call, reservations_table=reservation_table)
+
+
+    def show_main_menu(self, bot:TeleBot, message):
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 2
+        markup.add(
+            InlineKeyboardButton(NEW_RESERVATION_BUTTON, callback_data='cb_new_reservation'),
+            InlineKeyboardButton(MY_RESERVATIONS_BUTTON, callback_data='cb_my_reservations'),
+            InlineKeyboardButton(ABOUT_US_BUTTON, callback_data='cb_info')
+        )
+        bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+        bot.send_message(message.chat.id, WELCOME_MESSAGE, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+
     def callback_in_main_menu(self, call):
         global new_reservation
         if call.data == "cb_new_reservation":
             new_reservation = Reservation(telegramId=call.from_user.id, name=f'{call.from_user.full_name} ({call.from_user.username})')
             self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
-            show_reservation_type(self.bot, call)
+            self.show_reservation_type(self.bot, call)
         elif call.data == 'cb_my_reservations':
             self.bot.set_state(call.from_user.id, BotStates.state_my_reservation_list)
             self.show_my_reservations(call)
         elif call.data == "cb_info":
             self.bot.set_state(call.from_user.id, BotStates.state_info)
-            show_info(self.bot, call)
+            self.show_info(self.bot, call)
 
+
+    def show_info(self, bot:TeleBot, callback):
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 1
+        markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
+
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=INFO_MESSAGE, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
 
     def callback_in_info(self, call):
         if call.data == 'cb_back':
             self.bot.set_state(call.from_user.id, BotStates.state_main_menu)
-            show_main_menu(self.bot, call.message)
+            self.show_main_menu(self.bot, call.message)
 
-    
-    def callback_in_my_reservation_list(self, call):
-        if call.data == 'cb_back':
-            self.bot.set_state(call.from_user.id, BotStates.state_main_menu)
-            show_main_menu(self.bot, call.message)
+
+    def show_my_reservation(self, bot:TeleBot, callback, reservations_table: pd.DataFrame):
+        reservation_id = callback.data
+        reservation = reservations_table.loc[reservations_table['order_id'] == reservation_id]
+
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 1
+        if reservation['payed'].values[0] == 'False':
+            markup.add(InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now'),)
+
+        markup.add(
+            InlineKeyboardButton(CANCEL_RESERVATION_BUTTON, callback_data=f'delete_{reservation_id}'),
+            InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+        )
+        
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+
+        if not reservation.empty:
+            # DataFrame already contains localized times from repository
+            reservation_info = format_reservation_info(
+                reservation['day'].iloc[0],
+                reservation['time_from'].iloc[0],
+                reservation['time_to'].iloc[0],
+                reservation['place'].values[0]
+            )
+            bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)
         else:
-            self.bot.set_state(call.from_user.id, BotStates.state_my_reservation)
-            reservation_table = self.reservations_db.to_dataframe()
-            show_my_reservation(self.bot, call, reservations_table=reservation_table)
-
+            bot.edit_message_text(chat_id=chatId, message_id=messageId, text=RESERVATION_NOT_FOUND_MESSAGE)
 
     def callback_in_my_reservation(self, call):
         if call.data == 'cb_back':
@@ -396,39 +316,80 @@ class TelegramBot:
 
             self.notify_admin(f"✴️ Reservation was deleted:\n{deleted_reservation['From']}\n {deleted_reservation['OrderId']} \n{deleted_reservation['CreationTime']}")
 
-                
+
+    def show_reservation_type(self, bot:TeleBot, callback):
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 2
+        markup.add(
+            InlineKeyboardButton(HAIRSTYLE_BUTTON, callback_data='hairstyle'),
+            InlineKeyboardButton(BROWS_BUTTON, callback_data='brows'),
+            InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+        )
+
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_WORKPLACE_MESSAGE, reply_markup=markup)
+
     def callback_in_reservation_menu_type(self, call):
         global new_reservation
         if call.data == 'cb_back':
             self.bot.set_state(call.from_user.id, BotStates.state_main_menu)
-            show_main_menu(self.bot, call.message)
+            self.show_main_menu(self.bot, call.message)
         else:
             spec = call.data[0]
             new_reservation.type = spec
             self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_hours)
-            show_hours(self.bot, call)
+            self.show_hours(self.bot, call)
 
 
-    def callback_in_state_reservation_menu_hours(self, call):
+    def show_hours(self, bot:TeleBot, callback):
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 1
+        markup.add(
+            InlineKeyboardButton(config.period_buttons.get('hour_1')[1], callback_data=str(config.period_buttons.get('hour_1')[0])),
+            InlineKeyboardButton(config.period_buttons.get('hour_3')[1], callback_data=str(config.period_buttons.get('hour_3')[0])),
+            InlineKeyboardButton(config.period_buttons.get('day_1')[1], callback_data=str(config.period_buttons.get('day_1')[0])),
+            # InlineKeyboardButton(config.period_buttons.get('day_7')[1], callback_data=str(config.period_buttons.get('day_7')[0])),
+            InlineKeyboardButton(config.period_buttons.get('other')[1], callback_data=str(config.period_buttons.get('other')[0])),
+            InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+        )
+
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_TIME_MESSAGE, reply_markup=markup)
+
+    def callback_in_reservation_menu_hours(self, call):
         global new_reservation
         if call.data == 'cb_back':
             self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
-            show_reservation_type(self.bot, call)
+            self.show_reservation_type(self.bot, call)
         elif call.data == 'talk_to_admin':
             # bot.send_message(call.message.chat.id, 'Please contact the administrator for this request.')
             self.bot.set_state(call.from_user.id, BotStates.state_admin_chat)
-            show_admin_chat(self.bot, call)
+            self.show_admin_chat(self.bot, call)
         else:
             hours = int(call.data)
             new_reservation.period = hours
+            new_reservation.sum = config.prices[new_reservation.type] * new_reservation.period  # AG TODO: Move to Reservation class
             self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
             self.show_date(self.bot, call, new_reservation)
 
 
+    def show_admin_chat(self, bot:TeleBot, callback):
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 1
+        markup.add(
+            InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+        )
+
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=ADMIN_CHAT_MESSAGE, reply_markup=markup)
+
     def callback_in_admin_chat(self, call):
         if call.data == 'cb_back':
             self.bot.set_state(call.from_user.id, BotStates.state_main_menu)
-            show_main_menu(self.bot, call.message)
+            self.show_main_menu(self.bot, call.message)
         
         # Catch and resend message here:
     # # async def handle_message(update: Update, context: CallbackContext):
@@ -437,6 +398,7 @@ class TelegramBot:
     # #     await context.bot.send_message(chat_id=update.effective_chat.id,
     # #                                 text=status_message,
     # #                                 parse_mode='HTML')
+
 
     def format_calendar(self, calendar, new_reservation: Reservation):
         json_calendar = json.loads(calendar)
@@ -467,6 +429,7 @@ class TelegramBot:
                     
         return calendar
 
+
     def show_date(self, bot:TeleBot, callback, new_reservation:Reservation):
         calendar, step = WMonthTelegramCalendar().build()
         calendar = self.format_calendar(calendar, new_reservation)
@@ -475,11 +438,10 @@ class TelegramBot:
         messageId = callback.message.message_id
         bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_DATE_MESSAGE, reply_markup=calendar)
 
-
     def callback_in_reservation_menu_date(self, call):
         if call.data == 'cb_back':
             self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_hours)
-            show_hours(self.bot, call)
+            self.show_hours(self.bot, call)
             return
         
         result, key, step = DetailedTelegramCalendar().process(call.data)
@@ -514,106 +476,8 @@ class TelegramBot:
                 
 
                 self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
-                show_place(self.bot, call, new_reservation=new_reservation)
+                self.show_place(self.bot, call, new_reservation=new_reservation)
 
-
-    def callback_in_reservation_menu_time(self, call):
-        global new_reservation
-        if call.data == 'cb_back':
-            new_reservation.day = ''  # TODO
-            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
-            self.show_date(self.bot, call, new_reservation)
-        else:
-            callback_data = call.data.split('_p')
-            time = pd.to_datetime(callback_data[0])
-            available_places = ast.literal_eval(callback_data[1])
-
-            new_reservation.available_places = available_places
-            new_reservation.time_from = dt.combine(new_reservation.day.date(), time.time())
-            new_reservation.time_to = new_reservation.time_from + timedelta(hours=new_reservation.period)
-
-            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
-            show_place(self.bot, call, new_reservation=new_reservation)
-
-
-    def callback_in_reservation_menu_place(self, call):
-        global new_reservation
-        if call.data == 'cb_back':
-            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_time)
-            self.show_time(self.bot, call, new_reservation, going_back=True)
-        else:
-            place = int(call.data.split('_')[1])
-            new_reservation.place = place
-
-            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
-            show_recap(self.bot, call, new_reservation=new_reservation)
-
-
-    def callback_in_reservation_menu_recap(self, call):
-        global new_reservation
-        if call.data == 'cb_back':
-            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
-            show_place(self.bot, call, new_reservation)
-        elif call.data == 'pay_now':
-            self.bot.set_state(call.from_user.id, BotStates.state_prepay)
-            self.show_prepay(self.bot, call, new_reservation)
-        elif call.data == 'pay_later':
-            new_reservation.payed = 'No'
-            new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
-            save_result_ok = self.reservations_db.create_reservation(new_reservation)
-            if save_result_ok:
-                self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
-                self.bot.set_state(call.from_user.id, BotStates.state_start)
-                self.bot.send_message(call.message.chat.id, messages.format_reservation_confirm(new_reservation), parse_mode=ParseMode.MARKDOWN)
-
-                self.notify_admin('❇️ New reservation:\n'+messages.format_reservation_confirm(new_reservation))
-        else:
-            print('Unknown callback')
-
-
-    def show_prepay(self, bot:TeleBot, callback, new_reservation: Reservation):
-        markup = InlineKeyboardMarkup()
-        markup.row_width = 1
-        markup.add(
-            InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now', url=PAY_URL),
-            InlineKeyboardButton(PAY_DONE_BUTTON, callback_data='pay_done'),
-            InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
-        )
-
-        recap_string = format_prepay(555)
-
-        chatId = callback.message.chat.id
-        messageId = callback.message.message_id
-        bot.delete_message(chat_id=chatId, message_id=messageId)
-
-        # if len(recap_string) > 4095:
-        #     for x in range(0, len(recap_string), 4095):
-        #         # bot.reply_to(message, text=recap_string[x:x+4095])
-        #         bot.send_message(callback.message.chat.id, text=recap_string[x:x+4095], reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-        # else:
-        #     # bot.reply_to(message, text=recap_string)
-        #     bot.send_message(callback.message.chat.id, text=recap_string, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-
-        bot.send_message(callback.message.chat.id, text=recap_string, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-
-    def callback_in_prepay(self, call): 
-        global new_reservation
-        if call.data == 'cb_back':
-            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
-            show_recap(self.bot, call, new_reservation)
-        elif call.data == 'pay_done':
-            self.bot.set_state(call.from_user.id, BotStates.state_start)
-            new_reservation.payed = 'Pending'
-            new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
-            save_result_ok = self.reservations_db.create_reservation(new_reservation)
-            if save_result_ok:
-                self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
-                self.bot.set_state(call.from_user.id, BotStates.state_start)
-                self.bot.send_message(call.message.chat.id, messages.format_reservation_confirm_and_payed(new_reservation), parse_mode=ParseMode.MARKDOWN)
-
-                self.notify_admin('❇️ New reservation:\n'+messages.format_reservation_confirm_and_payed(new_reservation))
-        else:
-            print('Unknown callback')
 
     def show_time(self, bot: TeleBot, callback, new_reservation: Reservation, going_back=False):
         if callback.data != 'cb_back':
@@ -681,3 +545,134 @@ class TelegramBot:
             chatId = callback.message.chat.id
             messageId = callback.message.message_id
             bot.edit_message_text(chat_id=chatId, message_id=messageId, text=SELECT_TIME_SLOT_MESSAGE, reply_markup=markup)
+
+    def callback_in_reservation_menu_time(self, call):
+        global new_reservation
+        if call.data == 'cb_back':
+            new_reservation.day = ''  # TODO
+            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
+            self.show_date(self.bot, call, new_reservation)
+        else:
+            callback_data = call.data.split('_p')
+            time = pd.to_datetime(callback_data[0])
+            available_places = ast.literal_eval(callback_data[1])
+
+            new_reservation.available_places = available_places
+            new_reservation.time_from = dt.combine(new_reservation.day.date(), time.time())
+            new_reservation.time_to = new_reservation.time_from + timedelta(hours=new_reservation.period)
+
+            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
+            self.show_place(self.bot, call, new_reservation=new_reservation)
+
+
+    def show_place(self, bot:TeleBot, callback, new_reservation: Reservation):
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 4
+        for place in new_reservation.available_places:
+            markup.add(InlineKeyboardButton(f'Место {place}', callback_data=f'place_{place}'),)
+
+        markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
+
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+        bot.delete_message(chat_id=chatId, message_id=messageId)
+        bot.send_photo(chat_id=chatId, caption=SELECT_SEAT_MESSAGE, photo=open('img/seats/places_all.jpg', 'rb'), reply_markup=markup)
+
+    def callback_in_reservation_menu_place(self, call):
+        global new_reservation
+        if call.data == 'cb_back':
+            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_time)
+            self.show_time(self.bot, call, new_reservation, going_back=True)
+        else:
+            place = int(call.data.split('_')[1])
+            new_reservation.place = place
+
+            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
+            self.show_recap(self.bot, call, new_reservation=new_reservation)
+
+
+    def show_recap(self, bot:TeleBot, callback, new_reservation: Reservation):
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 1
+        markup.add(
+            InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now'),
+            InlineKeyboardButton(PAY_LATER_BUTTON, callback_data='pay_later'),
+            InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+        )
+        
+        img_path = f'img/seats/places_{new_reservation.place}.jpg'
+
+        recap_string = format_reservation_recap(new_reservation)
+
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+        bot.delete_message(chat_id=chatId, message_id=messageId)
+        bot.send_photo(callback.message.chat.id, caption=recap_string, photo=open(img_path, 'rb'), reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+
+    def callback_in_reservation_menu_recap(self, call):
+        global new_reservation
+        if call.data == 'cb_back':
+            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
+            self.show_place(self.bot, call, new_reservation)
+        elif call.data == 'pay_now':
+            self.bot.set_state(call.from_user.id, BotStates.state_prepay)
+            self.show_prepay(self.bot, call, new_reservation)
+        elif call.data == 'pay_later':
+            new_reservation.payed = False
+            new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
+            new_reservation.payment_confiramtion_link = 'TODO'
+            save_result_ok = self.reservations_db.create_reservation(new_reservation)
+            if save_result_ok:
+                self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
+                self.bot.set_state(call.from_user.id, BotStates.state_start)
+                self.bot.send_message(call.message.chat.id, messages.format_reservation_confirm(new_reservation), parse_mode=ParseMode.MARKDOWN)
+
+                self.notify_admin('❇️ New reservation:\n'+messages.format_reservation_confirm(new_reservation))
+        else:
+            print('Unknown callback')
+
+
+    def show_prepay(self, bot:TeleBot, callback, new_reservation: Reservation):
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 1
+        markup.add(
+            InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now', url=PAY_URL),
+            InlineKeyboardButton(PAY_DONE_BUTTON, callback_data='pay_done'),
+            InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+        )
+
+        recap_string = format_prepay(new_reservation.sum)
+
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+        bot.delete_message(chat_id=chatId, message_id=messageId)
+
+        # if len(recap_string) > 4095:
+        #     for x in range(0, len(recap_string), 4095):
+        #         # bot.reply_to(message, text=recap_string[x:x+4095])
+        #         bot.send_message(callback.message.chat.id, text=recap_string[x:x+4095], reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+        # else:
+        #     # bot.reply_to(message, text=recap_string)
+        #     bot.send_message(callback.message.chat.id, text=recap_string, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+
+        bot.send_message(callback.message.chat.id, text=recap_string, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+
+    def callback_in_prepay(self, call): 
+        global new_reservation
+        if call.data == 'cb_back':
+            self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
+            self.show_recap(self.bot, call, new_reservation)
+        elif call.data == 'pay_done':
+            self.bot.set_state(call.from_user.id, BotStates.state_start)
+            new_reservation.payed = False
+            new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
+            new_reservation.payment_confiramtion_link = 'TODO'
+            save_result_ok = self.reservations_db.create_reservation(new_reservation)
+            if save_result_ok:
+                self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
+                self.bot.set_state(call.from_user.id, BotStates.state_start)
+                self.bot.send_message(call.message.chat.id, messages.format_reservation_confirm_and_payed(new_reservation), parse_mode=ParseMode.MARKDOWN)
+
+                self.notify_admin('❇️ New reservation:\n'+messages.format_reservation_confirm_and_payed(new_reservation))
+        else:
+            print('Unknown callback')

@@ -60,7 +60,7 @@ def format_reservation_recap(reservation: Reservation):
 *Дата:* {reservation.day.strftime('%d.%m.%Y')}
 *Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}
-*Стоимость*: *666* CZK
+*Стоимость*: *{reservation.sum}* CZK
 '''
 
 
@@ -130,7 +130,7 @@ def prepare_for_db(dt, day=None):
         # Convert time to datetime using the provided day or current day
         if day is None:
             day = date.today()
-        dt_combined = datetime.combine(day, dt)
+        dt_combined = datetime.datetime.combine(day, dt)
         if dt_combined.tzinfo is None:
             dt_combined = pytz.timezone('UTC').localize(dt_combined)
         return dt_combined.astimezone(pytz.UTC)
