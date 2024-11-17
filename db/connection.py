@@ -1,609 +1,835 @@
-import os
+from typing import Generator, Optional, List
 from contextlib import contextmanager
-from typing import Generator
-from urllib.parse import urlparse, parse_qs
-import pandas as pd
-
-from dotenv import load_dotenv
-from sqlalchemy import create_engine, event
-from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError, DBAPIError
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.ext.declarative import declarative_base
-import datetime
-from datetime import date, time
+import os
+from datetime import datetime, date, time, timedelta
 import pytz
-from tg_bot import config
+from urllib.parse import urlparse
+import pandas as pd
+from sqlalchemy import create_engine, event, and_, or_
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.engine import Engine
+from sqlalchemy.pool import QueuePool
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
+import logging
+from functools import lru_cache
+from tenacity import retry, stop_after_attempt, wait_exponential
 
-from classes.classes import Reservation
 from db import models
+from tg_bot.config import places, workday_start, workday_end
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class DatabaseConfig:
     def __init__(self):
-        load_dotenv()
-        
-        # Get database URL with fallback
         self.database_url = self._get_database_url()
-        
-        # Configure connection pool
-        self.pool_size = int(os.getenv("DB_POOL_SIZE", "5"))
-        self.max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "10"))
-        self.pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", "30"))
-        self.pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "1800"))  # 30 minutes
+        self.pool_settings = {
+            'pool_size': int(os.getenv("DB_POOL_SIZE", "10")),
+            'max_overflow': int(os.getenv("DB_MAX_OVERFLOW", "20")),
+            'pool_timeout': int(os.getenv("DB_POOL_TIMEOUT", "30")),
+            'pool_recycle': int(os.getenv("DB_POOL_RECYCLE", "1800")),
+            'pool_pre_ping': True
+        }
+        self.workday_settings = {
+            'workday_start': int(os.getenv("WORKDAY_START", "9")),
+            'workday_end': int(os.getenv("WORKDAY_END", "21")),
+            'time_buffer': int(os.getenv("TIME_BUFFER", "30")),
+            'lookforward_days': int(os.getenv("LOOKFORWARD_DAYS", "30"))
+        }
         
     def _get_database_url(self) -> str:
-        """Get and format database URL with fallbacks"""
-        # Try getting URL directly
         url = os.getenv("DATABASE_URL")
-        
-        # Fall back to constructing from components if needed
         if not url:
             url = self._construct_db_url()
-            
-        # Handle Railway's internal/external URL conversion
+        
         if url and "postgres.railway.internal" in url:
             url = os.getenv("EXTERNAL_DATABASE_URL", url)
             
-        # Fix protocol for SQLAlchemy
         if url and url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
             
         if not url:
-            raise ValueError("No database URL configured")
+            raise DatabaseConfigError("No database URL configured")
             
         return url
     
-    def _construct_db_url(self) -> str:
-        """Construct database URL from individual components"""
-        host = os.getenv("PGHOST")
-        port = os.getenv("PGPORT")
-        database = os.getenv("PGDATABASE")
-        user = os.getenv("PGUSER")
-        password = os.getenv("PGPASSWORD")
+    @staticmethod
+    def _construct_db_url() -> Optional[str]:
+        required_params = ["PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"]
+        params = {param: os.getenv(param) for param in required_params}
         
-        if all([host, port, database, user, password]):
-            return f"postgresql://{user}:{password}@{host}:{port}/{database}"
+        if all(params.values()):
+            return f"postgresql://{params['PGUSER']}:{params['PGPASSWORD']}@{params['PGHOST']}:{params['PGPORT']}/{params['PGDATABASE']}"
         return None
 
 class Database:
     def __init__(self):
         self.config = DatabaseConfig()
         self.engine = self._create_engine()
-        self.SessionLocal = sessionmaker(
-            autocommit=False,
-            autoflush=False,
-            bind=self.engine
-        )
-        self.Base = declarative_base()
-        
-        # Set up engine event listeners
+        self.SessionLocal = self._create_session_factory()
         self._setup_engine_events()
         
     def _create_engine(self) -> Engine:
-        """Create SQLAlchemy engine with proper configuration"""
         return create_engine(
             self.config.database_url,
-            pool_size=self.config.pool_size,
-            max_overflow=self.config.max_overflow,
-            pool_timeout=self.config.pool_timeout,
-            pool_recycle=self.config.pool_recycle,
-            pool_pre_ping=True  # Enable connection health checks
+            poolclass=QueuePool,
+            **self.config.pool_settings
+        )
+    
+    def _create_session_factory(self) -> sessionmaker:
+        return sessionmaker(
+            bind=self.engine,
+            autocommit=False,
+            autoflush=False,
+            expire_on_commit=False
         )
     
     def _setup_engine_events(self):
         @event.listens_for(self.engine, "connect")
         def connect(dbapi_connection, connection_record):
-            print("Database connection established")
+            logger.info("Database connection established")
+            
+        @event.listens_for(self.engine, "checkout")
+        def checkout(dbapi_connection, connection_record, connection_proxy):
+            logger.debug("Connection checked out from pool")
 
-        # @event.listens_for(self.engine, "disconnect")
-        # def disconnect(dbapi_connection, connection_record):
-        #     print("Database connection closed")
+    def find_available_days(self, new_reservation: 'Reservation') -> List[datetime]:
+        """Find available days for a new reservation"""
+        try:
+            with self.get_db() as session:
+                return self._find_available_days(session, new_reservation)
+        except Exception as e:
+            logger.error(f"Error finding available days: {str(e)}")
+            return []
+        
+    def get_upcoming_reservations_by_telegram_id(self, telegram_id: str) -> List[models.Reservation]:
+        """
+        Get all upcoming reservations for a specific telegram user id.
+        
+        Args:
+            telegram_id: User's telegram id
+            
+        Returns:
+            List of upcoming Reservation model instances
+        """
+        try:
+            with self.get_db() as session:
+                # Get current datetime in UTC
+                current_datetime = datetime.now(pytz.UTC)
+                current_date = current_datetime.date()
+                
+                # Query upcoming reservations
+                upcoming_reservations = session.query(models.Reservation).filter(
+                    and_(
+                        models.Reservation.telegram_id == telegram_id,
+                        or_(
+                            # Future dates
+                            models.Reservation.day > current_date,
+                            # Today but future time
+                            and_(
+                                models.Reservation.day == current_date,
+                                models.Reservation.time_from > current_datetime
+                            )
+                        )
+                    )
+                ).order_by(
+                    models.Reservation.day,
+                    models.Reservation.time_from
+                ).all()
+                
+                return upcoming_reservations
+                
+        except Exception as e:
+            logger.error(f"Error getting upcoming reservations: {str(e)}")
+            return []
+        
+    def get_reservations_for_date(self, target_date: date) -> List[models.Reservation]:
+        """
+        Get all reservations for a specific date.
+        
+        Args:
+            target_date: Date object to query reservations for
+            
+        Returns:
+            List of Reservation model instances for the specified date
+        """
+        try:
+            with self.get_db() as session:
+                # Query reservations for the target date
+                reservations = session.query(models.Reservation).filter(
+                    models.Reservation.day == target_date
+                ).order_by(
+                    models.Reservation.time_from
+                ).all()
+                
+                return reservations
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Database error getting reservations for date {target_date}: {str(e)}")
+            return []
+        except Exception as e:
+            logger.error(f"Error getting reservations for date {target_date}: {str(e)}")
+            return []
+        
 
+    def get_available_timeslots(self, new_reservation: 'Reservation') -> dict[str, list[int]]:
+        """
+        Get all available timeslots for the day specified in the new reservation.
+        
+        Args:
+            new_reservation: Reservation object with type, period and day
+            
+        Returns:
+            Dictionary with time slots as keys (format "HH:MM") and lists of available places as values
+        """
+        try:
+            if not new_reservation.day:
+                logger.error("No day specified in reservation")
+                return {}
+
+            with self.get_db() as session:
+                # Get existing reservations for the day
+                existing_reservations = session.query(models.Reservation).filter(
+                    and_(
+                        # models.Reservation.type == new_reservation.type,
+                        models.Reservation.day == new_reservation.day.date()
+                    )
+                ).all()
+                
+                # Convert to DataFrame for easier processing
+                if existing_reservations:
+                    reservations_df = pd.DataFrame([{
+                        'time_from': r.time_from,
+                        'time_to': r.time_to,
+                        'place': r.place
+                    } for r in existing_reservations])
+                else:
+                    reservations_df = pd.DataFrame(columns=['time_from', 'time_to', 'place'])
+
+                # Get configuration
+                workday_start = self.config.workday_settings['workday_start']
+                workday_end = self.config.workday_settings['workday_end']
+                all_places = places.get(new_reservation.type)
+                
+                if not all_places:
+                    return {}
+
+                # Initialize result dictionary
+                available_slots = {}
+                
+                # Calculate time slots
+                slot_duration = timedelta(minutes=30)  # 30-minute intervals
+                reservation_duration = timedelta(hours=new_reservation.period)
+                
+                # Set time boundaries
+                day_start = new_reservation.day.replace(
+                    hour=workday_start,
+                    minute=0,
+                    second=0,
+                    microsecond=0
+                )
+                day_end = new_reservation.day.replace(
+                    hour=workday_end,
+                    minute=0,
+                    second=0,
+                    microsecond=0
+                )
+                
+                # Current time for today's checks
+                now = datetime.now(pytz.UTC)
+                
+                # Iterate through time slots
+                current_time : pd.Timestamp = day_start
+                while current_time + reservation_duration <= day_end:
+                    # Skip past times for today
+                    if new_reservation.day.date() == now.date() and pytz.UTC.localize(current_time.to_pydatetime()) <= now:
+                        current_time += slot_duration
+                        continue
+                    
+                    available_places = []
+                    slot_end_time = current_time + reservation_duration
+                    
+                    # Check each place
+                    for place in all_places:
+                        is_available = True
+                        # Check for overlapping reservations
+                        for _, reservation in reservations_df.iterrows():
+                            if (pytz.UTC.localize(current_time) < reservation['time_to'] and 
+                                pytz.UTC.localize(slot_end_time) > reservation['time_from'] and 
+                                place == reservation['place']):
+                                is_available = False
+                                break
+                        
+                        if is_available:
+                            available_places.append(place)
+                    
+                    # Add to results if there are available places
+                    if available_places:
+                        time_key = current_time.strftime('%H:%M')
+                        available_slots[time_key] = available_places
+                    
+                    current_time += slot_duration
+                
+                return available_slots
+                
+        except Exception as e:
+            logger.error(f"Error getting available timeslots: {str(e)}")
+            return {}
+
+    # def get_available_places_for_timeslot(self, new_reservation: 'Reservation', time_from: time, time_to: time) -> List[int] | None:
+    #     """
+    #     Find available places for a given timeslot.
+        
+    #     Args:
+    #         new_reservation: Reservation object with day and type
+    #         time_from: Time object for start of slot
+    #         time_to: Time object for end of slot
+            
+    #     Returns:
+    #         List of available place numbers or None if error
+    #     """
+    #     try:
+    #         if not all([new_reservation.day, new_reservation.type]):
+    #             logger.error("Missing required reservation details")
+    #             return None
+
+    #         with self.get_db() as session:
+    #             # Convert time objects to timezone-aware timestamps for comparison
+    #             naive_datetime_from = datetime.combine(new_reservation.day.date(), time_from)
+    #             naive_datetime_to = datetime.combine(new_reservation.day.date(), time_to)
+                
+    #             # Make datetimes timezone-aware
+    #             tz = pytz.UTC
+    #             datetime_from = tz.localize(naive_datetime_from)
+    #             datetime_to = tz.localize(naive_datetime_to)
+
+    #             # Validate time is within working hours
+    #             if (time_from < workday_start or 
+    #                 time_to > workday_end or
+    #                 time_from >= time_to):
+    #                 logger.error("Requested time is outside working hours or invalid")
+    #                 return None
+                
+    #             # Validate not in past
+    #             now = datetime.now(pytz.UTC)
+    #             if datetime_from <= now:
+    #                 logger.error("Requested time is in the past")
+    #                 return None
+                
+    #             # Get existing reservations for the timeframe
+    #             overlapping_reservations = session.query(models.Reservation).filter(
+    #                 and_(
+    #                     # models.Reservation.type == new_reservation.type,
+    #                     models.Reservation.day == new_reservation.day.date(),
+    #                     models.Reservation.time_from < datetime_to,
+    #                     models.Reservation.time_to > datetime_from
+    #                 )
+    #             ).all()
+                
+    #             # Get all occupied places
+    #             occupied_places = {r.place for r in overlapping_reservations}
+                
+    #             # Get all possible places for this type from config
+    #             all_places = places.get(new_reservation.type)
+                
+    #             if not all_places:
+    #                 logger.error(f"No places configured for type {new_reservation.type}")
+    #                 return None
+                
+    #             # Calculate available places
+    #             available_places = [
+    #                 place for place in all_places 
+    #                 if place not in occupied_places
+    #             ]
+                
+    #             return sorted(available_places)
+                
+    #     except Exception as e:
+    #         logger.error(f"Error getting available places: {str(e)}")
+    #         return None
+        
+    def generate_order_id(self, r: 'Reservation'):
+        return f'{r.day.strftime("%Y-%m-%d")}_{r.period}h_{r.time_from.strftime("%H-%M")}_p{r.place}_{r.telegram_id}'
+
+    def create_reservation(self, reservation: 'Reservation') -> Optional[models.Reservation]:
+        """
+        Create a new reservation in the database
+        
+        Args:
+            reservation: Reservation object with all required fields
+            
+        Returns:
+            Created Reservation model object or None if creation failed
+        """
+        try:
+            with self.get_db() as session:
+                # Generate order_id if not provided
+                if not reservation.order_id:
+                    day_str = reservation.day.strftime("%Y-%m-%d")
+                    time_str = reservation.time_from.strftime("%H-%M")
+                    reservation.order_id = f'{day_str}_{reservation.period}h_{time_str}_p{reservation.place}_{reservation.telegram_id}'
+
+                # Convert reservation to dict
+                reservation_data = reservation.to_dict()
+                
+                # Create new reservation model instance
+                db_reservation = models.Reservation(
+                    order_id=reservation_data['order_id'],
+                    telegram_id=reservation_data['telegram_id'],
+                    name=reservation_data['name'],
+                    type=reservation_data['type'],
+                    place=reservation_data['place'],
+                    day=reservation_data['day'],
+                    time_from=self.localize_datetime(reservation_data['time_from']),
+                    time_to=self.localize_datetime(reservation_data['time_to']),
+                    period=reservation_data['period'],
+                    payed=reservation_data.get('payed', 'False')  # Default to unpaid
+                )
+                
+                # Validate time slots are available
+                if not self._validate_reservation_slot(session, db_reservation):
+                    logger.error(f"Reservation slot not available for order {db_reservation.order_id}")
+                    return None
+
+                # Add and commit
+                session.add(db_reservation)
+                session.commit()
+                session.refresh(db_reservation)
+                
+                return db_reservation
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Database error creating reservation: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Error creating reservation: {str(e)}")
+            return None
+
+    def delete_reservation(self, order_id: str) -> Optional[dict]:
+        """
+        Delete a reservation by its order_id.
+        
+        Args:
+            order_id: Unique identifier of the reservation
+            
+        Returns:
+            Dictionary with deleted reservation details or None if deletion failed
+        """
+        try:
+            with self.get_db() as session:
+                # Find the reservation
+                reservation = session.query(models.Reservation).filter(
+                    models.Reservation.order_id == order_id
+                ).first()
+                
+                if not reservation:
+                    logger.error(f"Reservation not found for order_id: {order_id}")
+                    return None
+                
+                # Store reservation details before deletion
+                deleted_reservation = {
+                    'time_from': self.localize_datetime(reservation.time_from),
+                    'order_id': reservation.order_id,
+                    'created_at': self.localize_datetime(reservation.created_at)
+                }
+                
+                # Delete the reservation
+                session.delete(reservation)
+                session.commit()
+                
+                return deleted_reservation
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Database error deleting reservation {order_id}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Error deleting reservation {order_id}: {str(e)}")
+            return None
+        
+    def update_reservation(self, order_id: str, update_data: dict) -> bool:
+        """
+        Update a reservation with new data.
+        
+        Args:
+            order_id: Unique identifier of the reservation
+            update_data: Dictionary containing fields to update
+            
+        Returns:
+            Boolean indicating success or failure of update
+        """
+        try:
+            with self.get_db() as session:
+                # Find the reservation
+                reservation = session.query(models.Reservation).filter(
+                    models.Reservation.order_id == order_id
+                ).first()
+                
+                if not reservation:
+                    logger.error(f"Reservation not found for order_id: {order_id}")
+                    return False
+                
+                # List of allowed fields to update
+                allowed_fields = {
+                    'name', 'type', 'place', 'day',
+                    'time_from', 'time_to', 'period', 'payed'
+                }
+                
+                # Update only allowed fields
+                for key, value in update_data.items():
+                    if key in allowed_fields:
+                        # Handle datetime fields
+                        if key in ['time_from', 'time_to']:
+                            if value:
+                                # Ensure timezone awareness
+                                value = self.localize_datetime(
+                                    datetime.fromisoformat(value) if isinstance(value, str) else value
+                                )
+                        elif key == 'day':
+                            if value:
+                                # Convert string date to date object if needed
+                                value = (
+                                    datetime.strptime(value, '%Y-%m-%d').date()
+                                    if isinstance(value, str)
+                                    else value
+                                )
+                        
+                        setattr(reservation, key, value)
+                
+                # Validate updated reservation
+                if not self._validate_reservation_update(session, reservation):
+                    session.rollback()
+                    return False
+                
+                session.commit()
+                return True
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Database error updating reservation {order_id}: {str(e)}")
+            return False
+        except Exception as e:
+            logger.error(f"Error updating reservation {order_id}: {str(e)}")
+            return False
+
+    def _validate_reservation_update(self, session: Session, reservation: models.Reservation) -> bool:
+        """
+        Validate that the updated reservation doesn't conflict with existing ones.
+        
+        Args:
+            session: Database session
+            reservation: Updated reservation to validate
+            
+        Returns:
+            Boolean indicating if update is valid
+        """
+        try:
+            # Check for overlapping reservations
+            overlapping = session.query(models.Reservation).filter(
+                and_(
+                    models.Reservation.type == reservation.type,
+                    models.Reservation.place == reservation.place,
+                    models.Reservation.day == reservation.day,
+                    models.Reservation.id != reservation.id,  # Exclude current reservation
+                    or_(
+                        and_(
+                            models.Reservation.time_from < reservation.time_to,
+                            models.Reservation.time_to > reservation.time_from
+                        )
+                    )
+                )
+            ).first()
+            
+            if overlapping:
+                logger.error(f"Update would create booking conflict for order_id: {reservation.order_id}")
+                return False
+            
+            # Validate times
+            if (reservation.time_from >= reservation.time_to or(reservation.time_to - reservation.time_from).total_seconds() / 3600 != reservation.period):
+                logger.error(f"Invalid time range for order_id: {reservation.order_id}")
+                return False
+            
+            # Validate working hours
+            workday_start = self.config.workday_settings['workday_start']
+            workday_end = self.config.workday_settings['workday_end']
+            
+            if (
+                reservation.time_from.hour < workday_start or
+                reservation.time_to.hour > workday_end
+            ):
+                logger.error(f"Reservation outside working hours for order_id: {reservation.order_id}")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error validating reservation update: {str(e)}")
+            return False
+        
+    def _validate_reservation_slot(self, session: Session, reservation: models.Reservation) -> bool:
+        """
+        Validate that the requested time slot is available
+        
+        Args:
+            session: Database session
+            reservation: Reservation model to validate
+            
+        Returns:
+            bool indicating if slot is available
+        """
+        # Check for overlapping reservations
+        overlapping = session.query(models.Reservation).filter(
+            and_(
+                models.Reservation.type == reservation.type,
+                models.Reservation.place == reservation.place,
+                models.Reservation.day == reservation.day,
+                or_(
+                    and_(
+                        models.Reservation.time_from < reservation.time_to,
+                        models.Reservation.time_to > reservation.time_from
+                    )
+                )
+            )
+        ).first()
+        
+        return overlapping is None
+
+    def _find_available_days(self, session: Session, new_reservation: 'Reservation') -> List[datetime]:
+        now = datetime.now(pytz.UTC)
+        end_date = now + timedelta(days=self.config.workday_settings['lookforward_days'])
+        
+        # Get existing reservations
+        existing_reservations = self._get_existing_reservations(
+            session,
+            new_reservation.type,
+            now,
+            end_date
+        )
+        
+        # Generate possible days
+        days_to_check = self._generate_days_range(now, end_date)
+        
+        available_days = []
+        for day in days_to_check:
+            if self._has_available_slots(day, new_reservation, existing_reservations):
+                available_days.append(day)
+                
+        return available_days
+
+    def _get_existing_reservations(
+        self,
+        session: Session,
+        reservation_type: str,
+        start_date: datetime,
+        end_date: datetime
+    ) -> pd.DataFrame:
+        query = (
+            session.query(models.Reservation)
+            .filter(
+                and_(
+                    models.Reservation.type == reservation_type,
+                    models.Reservation.day >= start_date.date(),
+                    models.Reservation.day <= end_date.date()
+                )
+            )
+            .order_by(models.Reservation.day, models.Reservation.time_from)
+        )
+        
+        reservations = query.all()
+        
+        if not reservations:
+            return pd.DataFrame(columns=['day', 'time_from', 'time_to', 'place'])
+            
+        data = [{
+            'day': r.day,
+            'time_from': r.time_from,
+            'time_to': r.time_to,
+            'place': r.place
+        } for r in reservations]
+            
+        return pd.DataFrame(data)
+
+    def _generate_days_range(
+        self,
+        start_date: datetime,
+        end_date: datetime
+    ) -> List[datetime]:
+        days = []
+        current_day = start_date
+        workday_start = self.config.workday_settings['workday_start']
+        workday_end = self.config.workday_settings['workday_end']
+        
+        while current_day <= end_date:
+            if current_day == start_date and current_day.hour >= workday_end:
+                current_day += timedelta(days=1)
+                current_day = current_day.replace(
+                    hour=workday_start,
+                    minute=0,
+                    second=0,
+                    microsecond=0
+                )
+                continue
+                
+            day_start = current_day.replace(
+                hour=workday_start,
+                minute=0,
+                second=0,
+                microsecond=0
+            )
+            days.append(day_start)
+            
+            current_day += timedelta(days=1)
+            
+        return days
+
+    def _has_available_slots(
+        self,
+        day: datetime,
+        new_reservation: 'Reservation',
+        existing_reservations: pd.DataFrame
+    ) -> bool:
+        day_reservations = existing_reservations[
+            existing_reservations['day'] == day.date()
+        ]
+        
+        all_places = places.get(new_reservation.type)
+        if not all_places:
+            return False
+            
+        duration = timedelta(hours=new_reservation.period)
+        workday_start = self.config.workday_settings['workday_start']
+        workday_end = self.config.workday_settings['workday_end']
+        
+        current_time = day.replace(hour=workday_start, minute=0)
+        end_time = day.replace(hour=workday_end, minute=0)
+        
+        while current_time + duration <= end_time:
+            if current_time <= datetime.now(pytz.UTC):
+                current_time += timedelta(minutes=30)
+                continue
+                
+            for place in all_places:
+                if self._is_slot_available(
+                    current_time,
+                    current_time + duration,
+                    place,
+                    day_reservations
+                ):
+                    return True
+                    
+            current_time += timedelta(minutes=30)
+            
+        return False
+
+    def _is_slot_available(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        place: int,
+        day_reservations: pd.DataFrame
+    ) -> bool:
+        place_reservations = day_reservations[
+            day_reservations['place'] == place
+        ]
+        
+        for _, reservation in place_reservations.iterrows():
+            if (start_time < reservation['time_to'] and 
+                end_time > reservation['time_from']):
+                return False
+                
+        return True
+
+    # [Previous methods remain unchanged...]
     @contextmanager
     def get_db(self) -> Generator[Session, None, None]:
-        """Provide a transactional scope around a series of operations"""
         session = self.SessionLocal()
         try:
             yield session
             session.commit()
         except SQLAlchemyError as e:
             session.rollback()
-            raise DatabaseError(f"Database error occurred: {str(e)}")
+            logger.error(f"Database error: {str(e)}")
+            raise DatabaseError(f"Database operation failed: {str(e)}")
         except Exception as e:
             session.rollback()
+            logger.error(f"Unexpected error: {str(e)}")
             raise
         finally:
             session.close()
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        reraise=True
+    )
+    def execute_with_retry(self, session: Session, operation):
+        try:
+            return operation(session)
+        except OperationalError as e:
+            logger.warning(f"Database operation failed, retrying: {str(e)}")
+            session.rollback()
+            raise
 
-    def create_reservation(self, reservation_data: Reservation):
-        """Create a new reservation with proper timezone handling"""
-        reservation_dict = reservation_data.to_dict()
-        
-        # Convert time objects to timezone-aware datetime objects
-        reservation_dict['time_from'] = reservation_dict['time_from']
-        reservation_dict['time_to'] = reservation_dict['time_to']
-        
-        db_reservation = models.Reservation(**reservation_dict)
-
-        with self.get_db() as db:
-            db.add(db_reservation)
-            try:
-                db.commit()
-                db.refresh(db_reservation)
-                return db_reservation
-            except:
-                db.rollback()
-                return None
-
-
-    def update_reservation(self, order_id: str, data: dict) -> bool:
-        with self.get_db() as db:
-            reservation = db.query(models.Reservation)\
-                            .filter(models.Reservation.order_id == order_id)\
-                            .first()
-            if reservation:
-                for key, value in data.items():
-                    setattr(reservation, key, value)
-                try:
-                    db.commit()
-                    return True
-                except:
-                    db.rollback()
-            return False
-
-
-    def get_reservations_by_telegram_id(self, telegram_id: str):
-        with self.get_db() as db:
-            return db.query(models.Reservation)\
-                        .filter(models.Reservation.telegram_id == telegram_id)\
-                        .all()
-
-
-    # def get_upcoming_reservations_by_telegram_id(self, telegram_id: str):
-    #     current_datetime = datetime.now()
-    #     current_datetime = prepare_for_db(current_datetime)
-    #     current_date = current_datetime.date()  # This calls the date() method
-        
-    #     return self.db.query(models.Reservation)\
-    #                  .filter(
-    #                      and_(
-    #                          models.Reservation.telegram_id == telegram_id,
-    #                          or_(
-    #                              models.Reservation.day > current_date,
-    #                              and_(
-    #                                  models.Reservation.day == current_date,
-    #                                  models.Reservation.time_from > current_datetime
-    #                              )
-    #                          )
-    #                      )
-    #                  )\
-    #                  .order_by(models.Reservation.day, models.Reservation.time_from)\
-    #                  .all()
-
-
-    # # Alternative version if time_from is stored as timestamp with timezone
-    # def get_upcoming_reservations_by_telegram_id_v2(self, telegram_id: str):
-    #     current_datetime = datetime.now()
-    #     current_datetime = prepare_for_db(current_datetime)
-        
-    #     return self.db.query(models.Reservation)\
-    #                  .filter(
-    #                      and_(
-    #                          models.Reservation.telegram_id == telegram_id,
-    #                          or_(
-    #                              models.Reservation.time_from > current_datetime
-    #                          )
-    #                      )
-    #                  )\
-    #                  .order_by(models.Reservation.time_from)\
-    #                  .all()
-
-
-    # def delete_reservation(self, order_id: str) -> Optional[models.Reservation]:
-    #     reservation = self.db.query(models.Reservation)\
-    #                        .filter(models.Reservation.order_id == order_id)\
-    #                        .first()
-    #     if reservation:
-    #         deleted_reservation = {
-    #             'From': reservation.time_from,
-    #             'OrderId': reservation.order_id,
-    #             'CreationTime': reservation.created_at
-    #         }
-
-    #         self.db.delete(reservation)
-    #         try:
-    #             self.db.commit()
-    #             deleted_reservation['From'] = localize_from_db(deleted_reservation['From'])
-    #             return deleted_reservation
-    #         except:
-    #             self.db.rollback()
-    #     return None
-
-
-    # def get_reservations_by_type_and_date_range(self, reservation_type: str, start_date: date, end_date: date):
-    #     return self.db.query(models.Reservation)\
-    #                  .filter(
-    #                      and_(
-    #                          models.Reservation.type == reservation_type,
-    #                          models.Reservation.day >= start_date,
-    #                          models.Reservation.day <= end_date
-    #                      )
-    #                  )\
-    #                  .order_by(models.Reservation.day, models.Reservation.time_from)\
-    #                  .all()
-
-
-    # def get_reservations_for_date(self, target_date: date):
-    #     return self.db.query(models.Reservation)\
-    #                  .filter(models.Reservation.day == target_date)\
-    #                  .order_by(models.Reservation.time_from)\
-    #                  .all()
-
-
-    # def get_available_places_for_timeslot(self, place_type: str, day: date, time_from: time, time_to: time) -> List[int]:
-    #     """
-    #     Find available places for a given timeslot
-    #     """
-    #     # Convert times to timezone-aware datetimes for comparison
-    #     datetime_from = prepare_for_db(datetime.combine(day, time_from))
-    #     datetime_to = prepare_for_db(datetime.combine(day, time_to))
-        
-    #     occupied_places = self.db.query(models.Reservation.place)\
-    #                            .filter(
-    #                                and_(
-    #                                    models.Reservation.day == day,
-    #                                    models.Reservation.time_from < datetime_to,
-    #                                    models.Reservation.time_to > datetime_from
-    #                                )
-    #                            )\
-    #                            .all()
-        
-    #     occupied_places = [place[0] for place in occupied_places]
-    #     all_places = config.places[place_type]
-    #     return [place for place in all_places if place not in occupied_places]
-
-
-    def to_dataframe(self) -> pd.DataFrame:
-        """Convert all reservations to a pandas DataFrame with localized times"""
-        with self.get_db() as db:
-            reservations = db.query(models.Reservation).all()
-        
-            if not reservations:
-                return pd.DataFrame(columns=[
-                    'id', 'created_at', 'order_id', 'telegram_id', 'name',
-                    'type', 'place', 'day', 'time_from', 'time_to', 'period', 'payed'
-                ])
-                
-            data = []
-            for r in reservations:
-                data.append({
-                    'id': r.id,
-                    'created_at': self.localize_from_db(r.created_at),
-                    'order_id': r.order_id,
-                    'telegram_id': r.telegram_id,
-                    'name': r.name,
-                    'type': r.type,
-                    'place': r.place,
-                    'day': r.day,  # Date doesn't need timezone conversion
-                    'time_from': self.localize_from_db(r.time_from),
-                    'time_to': self.localize_from_db(r.time_to),
-                    'period': r.period,
-                    'payed': r.payed
-                })
-            
-            return pd.DataFrame(data)
-    
-
-    # def find_closest_slot_start(mins_buffer):
-    #     current_datetime = datetime.now()
-    #     if 0 <= current_datetime.minute <= 30-mins_buffer:  # xx:00 - xx:20
-    #         next_available_timeslot_start = (current_datetime.replace(minute=30, second=0, microsecond=000000))  # give xx:30
-    #     elif 30-mins_buffer <= current_datetime.minute <= 60-mins_buffer:  # xx:20 - xx:50
-    #         next_available_timeslot_start = (current_datetime.replace(hour=current_datetime.hour+1, minute=0, second=0, microsecond=000000))  # give xx+1:00
-    #     elif 60-mins_buffer <= current_datetime.minute < 60:  # xx:50 - xx:59
-    #         next_available_timeslot_start = (current_datetime.replace(hour=current_datetime.hour+1, minute=30, second=0, microsecond=000000))  # give xx+1:30
-    #     return next_available_timeslot_start
-
-
-    # def generate_days_intervals(to_date: datetime, timeslot_size_h: int) -> list[datetime]:
-    #     days: list[datetime] = []
-
-    #     current_datetime = datetime.now()   
-    #     end_of_current_day = current_datetime.replace(hour=config.workday_end.hour-1, minute=59, second=59, microsecond=999)
-
-    #     if current_datetime.time() < config.workday_start:
-    #         days.append(current_datetime.replace(hour=config.workday_start.hour,
-    #                                             minute=config.workday_start.minute,
-    #                                             second=config.workday_start.second))
-
-    #     elif current_datetime + timedelta(hours=timeslot_size_h, minutes=config.time_buffer_mins) <= end_of_current_day:
-    #         next_available_timeslot_start = find_closest_slot_start(mins_buffer=config.time_buffer_mins)
-    #         days.append(pd.to_datetime(next_available_timeslot_start))
-        
-
-    #     start_of_the_next_day = current_datetime.replace(hour=config.workday_start.hour, 
-    #                                                     minute=config.workday_start.minute, 
-    #                                                     second=config.workday_start.second, 
-    #                                                     microsecond=config.workday_start.microsecond
-    #                                                     ) + timedelta(days=1)
-        
-    #     date_range_with_time = pd.date_range(start_of_the_next_day, end=to_date, freq='D')
-
-    #     for day in date_range_with_time:
-    #         # Generate time intervals from 06:00 to 23:59 for the full days
-    #         days.append(day)
-            
-    #     return days
-
-
-    # def find_available_days(new_reservation: Reservation, reservation_table: pd.DataFrame, to_date = None) -> list[datetime]:  # AG: Now returns only days with no reservations
-    #     current_datetime = datetime.now()
-
-    #     # Some kind of lookforward; TODO: refactor
-    #     if not to_date:
-    #         to_date = (current_datetime.replace(day=1) + timedelta(days=config.days_lookforward)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    #     days_to_check = generate_days_intervals(to_date, timeslot_size_h=new_reservation.period)
-
-    #     # Initialize list to store time gaps
-    #     available_days: list[datetime] = []
-
-    #     # Iterate through each day within the specified range
-    #     for day_start in days_to_check:
-    #         gaps = find_reservation_gaps(reservation_table, selected_date=day_start, reservation_type=new_reservation.type, min_gap_hours=new_reservation.period)
-
-    #         if len(gaps) > 0:
-    #             available_days.append(day_start)
-
-    #     return available_days
-
-
-    # def find_timeslots(new_reservation: Reservation, reservation_table: pd.DataFrame, on_date : datetime) -> dict[str, list[int]]:  # AG: Now returns only days with no reservations
-    #     timeslots: dict[str, list[int]] = {}
-    #     day_start : datetime
-    #     day_end = on_date.replace(hour=config.workday_end.hour, 
-    #                               minute=config.workday_end.minute, 
-    #                               second=config.workday_end.second, 
-    #                               microsecond=config.workday_end.microsecond)
-        
-    #     # day_str = day_start.strftime('%Y-%m-%d')
-    #     current_datetime = datetime.now()  
-
-    #     if on_date.date() == current_datetime.now().date():
-    #         day_start = find_closest_slot_start(mins_buffer=config.time_buffer_mins)
-    #     else:
-    #         day_start = on_date.replace(hour=config.workday_start.hour, 
-    #                                     minute=config.workday_start.minute, 
-    #                                     second=config.workday_start.second, 
-    #                                     microsecond=config.workday_start.microsecond
-    #                                     )
-
-    #     # Filter reservations for the current day
-    #     reservations_on_day = reservation_table[reservation_table['Day'] == day_start.strftime('%Y-%m-%d')]
-    #     reservations_on_day = reservations_on_day[reservations_on_day['Place'].isin(config.places[new_reservation.type])]
-    #     reservations_on_day.sort_values(by='From', inplace=True)
-    #     print(f'Reservations on {day_start.strftime("%Y-%m-%d")}: {len(reservations_on_day)}')
-
-    #     gap_start_time = day_start
-    #     gap_end_time = gap_start_time + timedelta(hours=new_reservation.period)
-
-    #     if len(reservations_on_day) == 0:
-    #         while gap_end_time <= day_end:
-    #             timeslots[gap_start_time.strftime('%H:%M')] = list(config.places[new_reservation.type])
-    #             gap_start_time = (gap_start_time + timedelta(minutes=config.time_step))
-    #             gap_end_time = gap_start_time + timedelta(hours=new_reservation.period)
-    #     elif len(reservations_on_day) >= 1:
-    #         while gap_end_time <= day_end:
-    #             reservations_overlap = find_overlaps(reservations_on_day, (gap_start_time, gap_end_time))
-    #             if len(reservations_overlap) > 0:
-    #                 booked_places = reservations_overlap['Place'].astype(int).to_list()
-    #                 free_places = list(sorted(set(config.places[new_reservation.type]) - set(booked_places)))
-    #                 if len(free_places) > 0:
-    #                     timeslots[gap_start_time.strftime('%H:%M')] = free_places
-    #             else:
-    #                 timeslots[gap_start_time.strftime('%H:%M')] = list(config.places[new_reservation.type])
-                
-    #             gap_start_time = (gap_start_time + timedelta(minutes=config.time_step))
-    #             gap_end_time = gap_start_time + timedelta(hours=new_reservation.period)
-
-    #     return timeslots
-
-
-#     def generate_available_timeslots(reservation_table: pd.DataFrame, new_reservation:Reservation, on_date : datetime) -> dict[str, list[int]]:
-#         available_timeslots = {}
-        
-#         # Convert stride to timedelta
-#         # stride = timedelta(minutes=stride_minutes)
-#         stride = timedelta(minutes=config.time_step)
-        
-#         # Convert reservation period to timedelta
-#         reservation_period = timedelta(hours=new_reservation.period)
-
-#         gaps = find_reservation_gaps(df=reservation_table, 
-#                                     selected_date=on_date, 
-#                                     reservation_type=new_reservation.type, 
-#                                     min_gap_hours=new_reservation.period)
-        
-#         # Iterate through all gaps for all places
-#         for place, place_gaps in gaps.items():
-#             for gap in place_gaps:
-#                 current_time = gap['start']
-#                 while current_time + reservation_period <= gap['end']:
-#                     # Format the current time as a string key
-#                     time_key = current_time.strftime('%H:%M')
-                    
-#                     # Add the place to the list of available places for this timeslot
-#                     if time_key not in available_timeslots:
-#                         available_timeslots[time_key] = []
-#                     available_timeslots[time_key].append(place)
-                    
-#                     # Move to the next timeslot
-#                     current_time += stride
-        
-#         # Sort the timeslots
-#         available_timeslots = dict(sorted(available_timeslots.items()))
-        
-#         return available_timeslots
-
-
-#     def find_reservation_gaps(df:pd.DataFrame, selected_date:datetime|str, reservation_type:str, min_gap_hours=0):
-#         """
-#         Find gaps between reservations for each place on a selected date.
-#         Handles empty DataFrames and returns all places as fully available.
-        
-#         Args:
-#             df (pd.DataFrame): Reservations DataFrame
-#             selected_date (datetime|str): Date to check for gaps
-#             reservation_type (str): Type of reservation (e.g., 'hairstyle', 'brows')
-#             min_gap_hours (float): Minimum gap duration to consider (in hours)
-        
-#         Returns:
-#             dict: Dictionary of gaps for each place
-#         """
-#         # Convert selected_date to datetime if it's a string
-#         if isinstance(selected_date, str):
-#             selected_date = datetime.strptime(selected_date, '%Y-%m-%d')
-        
-#         # Initialize dictionary to store gaps for each place
-#         gaps = {}
-        
-#         # Get places for the reservation type
-#         places = config.places[reservation_type]
-        
-#         # If DataFrame is empty or has no reservations for the day,
-#         # return full day availability for all places
-#         if df.empty:
-#             for place in places:
-#                 start = datetime.combine(selected_date.date(), config.workday_start)
-#                 end = datetime.combine(selected_date.date(), config.workday_end)
-#                 gap = {
-#                     'start': start,
-#                     'end': end,
-#                     'duration': (end - start).total_seconds() / 3600  # in hours
-#                 }
-#                 gaps[place] = [gap]
-#             return gaps
-        
-#         try:        
-#             # Ensure datetime columns are properly formatted
-#             if not pd.api.types.is_datetime64_any_dtype(df['time_from']):
-#                 df['time_from'] = pd.to_datetime(df['time_from']).dt.time
-                
-#             if not pd.api.types.is_datetime64_any_dtype(df['time_to']):
-#                 df['time_to'] = pd.to_datetime(df['time_to']).dt.time
-                
-#             # Filter for selected date
-#             df_day = df[df['time_from'].dt.date == selected_date.date()]
-            
-#             # Sort by start time
-#             df_day = df_day.sort_values('time_from')
-            
-#             for place in places:
-#                 # Filter reservations for this place
-#                 place_reservations = df_day[df_day['place'].astype(int) == place]
-                
-#                 place_gaps = []
-
-#                 if place_reservations.empty:
-#                     # If there are no reservations for this place, the whole day is a gap
-#                     start = datetime.combine(selected_date.date(), config.workday_start)
-#                     end = datetime.combine(selected_date.date(), config.workday_end)
-#                     gap = {
-#                         'start': start,
-#                         'end': end,
-#                         'duration': (end - start).total_seconds() / 3600  # in hours
-#                     }
-#                     place_gaps.append(gap)
-#                     gaps[place] = place_gaps
-#                     continue
-                
-#                 # Start of the day
-#                 previous_end = datetime.combine(selected_date.date(), config.workday_start)
-                
-#                 for _, reservation in place_reservations.iterrows():
-#                     if reservation['time_from'] > previous_end:
-#                         gap_duration = (reservation['time_from'] - previous_end).total_seconds() / 3600
-#                         if gap_duration >= min_gap_hours:
-#                             gap = {
-#                                 'start': previous_end,
-#                                 'end': reservation['time_from'],
-#                                 'duration': gap_duration
-#                             }
-#                             place_gaps.append(gap)
-                    
-#                     previous_end = reservation['time_to']
-                
-#                 # Check for gap at the end of the day
-#                 day_end = datetime.combine(selected_date.date(), config.workday_end)
-#                 if previous_end < day_end:
-#                     gap_duration = (day_end - previous_end).total_seconds() / 3600
-#                     if gap_duration >= min_gap_hours:
-#                         gap = {
-#                             'start': previous_end,
-#                             'end': day_end,
-#                             'duration': gap_duration
-#                         }
-#                         place_gaps.append(gap)
-                
-#                 if place_gaps:  # Only add to gaps if there are any gaps longer than min_gap_hours
-#                     gaps[place] = place_gaps
-                
-#         except Exception as e:
-#             print(f"Error processing reservations: {str(e)}")
-#             # In case of any error, return full day availability for all places
-#             for place in places:
-#                 start = datetime.combine(selected_date.date(), config.workday_start)
-#                 end = datetime.combine(selected_date.date(), config.workday_end)
-#                 gap = {
-#                     'start': start,
-#                     'end': end,
-#                     'duration': (end - start).total_seconds() / 3600  # in hours
-#                 }
-#                 gaps[place] = [gap]
-        
-#         return gaps
-
-
-#     def generate_order_id(r: Reservation):
-#         return f'{r.day.strftime("%Y-%m-%d")}_{r.period}h_{r.time_from.strftime("%H-%M")}_p{r.place}_{r.telegram_id}'
-
-
-    def localize_from_db(self, dt:datetime.datetime):
-        """Convert UTC datetime from DB to local timezone"""
+    @staticmethod
+    def localize_datetime(dt: datetime) -> datetime:
         if dt is None:
             return None
         
-        if isinstance(dt, datetime.datetime):
-            # Convert UTC datetime to local timezone
+        if isinstance(dt, datetime):
             if dt.tzinfo is None:
                 dt = pytz.UTC.localize(dt)
-            return dt.astimezone(pytz.timezone(config.LOCAL_TIMEZONE))
-        elif isinstance(dt, date):
-            # Only date, no timezone conversion needed
-            return dt
+            return dt.astimezone(pytz.timezone('UTC'))
         return dt
-
-#     def prepare_for_db(dt, day=None):
-#         """Convert local time/datetime to UTC datetime for DB storage"""
-#         if dt is None:
-#             return None
-            
-#         if isinstance(dt, datetime):
-#             # If datetime has no timezone, assume it's in local timezone
-#             if dt.tzinfo is None:
-#                 dt = pytz.timezone('UTC').localize(dt)
-#             # Convert to UTC for storage
-#             return dt.astimezone(pytz.UTC)
-#         elif isinstance(dt, time):
-#             # Convert time to datetime using the provided day or current day
-#             if day is None:
-#                 day = date.today()
-#             dt_combined = datetime.combine(day, dt)
-#             if dt_combined.tzinfo is None:
-#                 dt_combined = pytz.timezone('UTC').localize(dt_combined)
-#             return dt_combined.astimezone(pytz.UTC)
-#         return dt
+    
+    def to_dataframe(self) -> pd.DataFrame:
+        """
+        Convert all reservations to a pandas DataFrame with localized times
+        Returns DataFrame with all reservations or empty DataFrame if none found
+        """
+        try:
+            with self.get_db() as session:
+                reservations = session.query(models.Reservation).all()
+                
+                if not reservations:
+                    return pd.DataFrame(columns=[
+                        'id', 'created_at', 'order_id', 'telegram_id', 'name',
+                        'type', 'place', 'day', 'time_from', 'time_to', 'period', 'payed'
+                    ])
+                
+                data = []
+                for r in reservations:
+                    data.append({
+                        'id': r.id,
+                        'created_at': self.localize_datetime(r.created_at),
+                        'order_id': r.order_id,
+                        'telegram_id': r.telegram_id,
+                        'name': r.name,
+                        'type': r.type,
+                        'place': r.place, 
+                        'day': r.day,  # Date doesn't need timezone conversion
+                        'time_from': self.localize_datetime(r.time_from),
+                        'time_to': self.localize_datetime(r.time_to),
+                        'period': r.period,
+                        'payed': r.payed
+                    })
+                
+                return pd.DataFrame(data)
+                
+        except Exception as e:
+            logger.error(f"Error converting to dataframe: {str(e)}")
+            # Return empty DataFrame with correct columns on error
+            return pd.DataFrame(columns=[
+                'id', 'created_at', 'order_id', 'telegram_id', 'name',
+                'type', 'place', 'day', 'time_from', 'time_to', 'period', 'payed'
+            ])
 
 class DatabaseError(Exception):
-    """Custom exception for database-related errors"""
+    pass
+
+class DatabaseConfigError(DatabaseError):
+    pass
+
+class DatabaseConnectionError(DatabaseError):
+    pass
+
+class DatabaseOperationError(DatabaseError):
     pass
