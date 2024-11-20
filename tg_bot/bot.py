@@ -22,7 +22,6 @@ from tg_bot import messages
 from classes.classes import Reservation
 import ast
 
-from tg_bot.config import *
 from tg_bot.messages import *
 from db.connection import Database
 from tg_bot import config
@@ -49,17 +48,12 @@ class TelegramBot:
         self.reservations_db = reservations_db
 
         self.bot.add_custom_filter(custom_filters.StateFilter(self.bot))
-        # Register handlers in __init__
         self.register_handlers()
         self.register_callback_handlers()
 
 
     def notify_admin(self, text:str):
-        notification_text = f"""
-    {text}        
-
-    """
-        self.bot.send_message(chat_id=admin_chat_id, text=notification_text, parse_mode=ParseMode.MARKDOWN)
+        self.bot.send_message(chat_id=config.admin_chat_id, text=text, parse_mode=ParseMode.MARKDOWN_V2)
 
     
     def register_handlers(self):
@@ -77,11 +71,10 @@ class TelegramBot:
                 self.bot.send_message(msg.chat.id, "Hello!")
             else:
                 self.bot.forward_message(
-                    chat_id=admin_chat_id,
+                    chat_id=config.admin_chat_id,
                     from_chat_id=msg.chat.id,
                     message_id=msg.message_id
                 )
-                self.bot.set_state(msg.from_user.id, BotStates.state_admin_chat)
 
                 sleep(1.5)
 
@@ -102,6 +95,55 @@ class TelegramBot:
                     "Что-нибудь еще?",
                     reply_markup=markup
                 )
+
+        @self.bot.message_handler(
+            content_types=['photo'],
+        )
+        def handle_payment_photo(message):
+            photo = message.photo[-1]
+            file_id = photo.file_id
+            file_info = self.bot.get_file(file_id)
+            file_path = file_info.file_path
+            
+            # Construct the direct download link (valid for 1 hour)
+            file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_path}"
+
+            last_reservation = self.reservations_db.get_last_reservation_by_telegram_id(str(message.from_user.id))
+
+            if last_reservation and not last_reservation.payment_confiramtion_link and not last_reservation.payed:
+                # Case 1: Last reservation exists and needs payment confirmation
+
+                # Add payment confirmation to the last reservation
+                self.reservations_db.update_payment_confirmation(last_reservation.order_id, file_url)
+                
+                # Notify user
+                self.bot.reply_to(message, text=messages.format_payment_confirm_receive(last_reservation))
+
+                # Notify admin
+                admin_notification = messages.format_payment_confirm_receive_admin_notofication(last_reservation)
+                self.notify_admin(admin_notification)
+
+            else:
+                # Get all unpaid reservations without confirmation
+                unpaid_reservations = self.reservations_db.get_unpaid_reservations_by_telegram_id(str(message.from_user.id))
+                
+                if len(unpaid_reservations) == 0:
+                    # No reservations need payment confirmation
+                    self.bot.reply_to(message, text=messages.format_no_pending_payments())
+                
+                elif len(unpaid_reservations) == 1:
+                    # Only one reservation needs confirmation
+                    reservation = unpaid_reservations[0]
+                    self.reservations_db.update_payment_confirmation(reservation.order_id, file_url)
+                    
+                    self.bot.reply_to(message, messages.format_payment_confirm_receive(reservation))
+                    
+                    admin_notification = messages.format_payment_confirm_receive_admin_notofication(reservation)
+                    self.notify_admin(admin_notification)
+                
+                else:
+                    # Multiple reservations need confirmation
+                    self.bot.reply_to(message, text=messages.format_multiple_pending_payments())
 
     def register_callback_handlers(self):
         """Register all callback query handlers"""
@@ -168,8 +210,12 @@ class TelegramBot:
         self.bot.callback_query_handler(
             func=lambda call: True, 
             state=BotStates.state_reservation_menu_recap
-        )(self.callback_in_reservation_menu_recap)  
+        )(self.callback_in_reservation_menu_recap)
 
+        self.bot.callback_query_handler(
+            func=lambda call: True, 
+            state=BotStates.state_payment_confirm
+        )(self.callback_in_payment_confirm)
 
     def start(self, message):
         chat_id = message.chat.id
@@ -204,7 +250,7 @@ class TelegramBot:
                     time_from_str = r.time_from.strftime("%H:%M")
                     time_to_str = r.time_to.strftime("%H:%M")
                     
-                    button_text = f'{day_str}  c {time_from_str} до {time_to_str}'
+                    button_text = f'{"✅" if r.payed else "💳"} {day_str}  c {time_from_str} до {time_to_str}'
                     markup.add(InlineKeyboardButton(
                         text=button_text,
                         callback_data=r.order_id
@@ -275,12 +321,19 @@ class TelegramBot:
 
 
     def show_my_reservation(self, bot:TeleBot, callback, reservations_table: pd.DataFrame):
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
         reservation_id = callback.data
-        reservation = reservations_table.loc[reservations_table['order_id'] == reservation_id]
+        reservation_df = reservations_table.loc[reservations_table['order_id'] == reservation_id]
+        if reservation_df.empty:
+            bot.edit_message_text(chat_id=chatId, message_id=messageId, text=RESERVATION_NOT_FOUND_MESSAGE)
+            return
+        
+        reservation = Reservation.from_dataframe_row(reservation_df)
 
         markup = InlineKeyboardMarkup()
         markup.row_width = 1
-        if reservation['payed'].values[0] == 'False':
+        if reservation.payed == False:
             markup.add(InlineKeyboardButton(PAY_NOW_BUTTON, callback_data='pay_now'),)
 
         markup.add(
@@ -288,20 +341,11 @@ class TelegramBot:
             InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
         )
         
-        chatId = callback.message.chat.id
-        messageId = callback.message.message_id
+        reservation_info = format_reservation_info(reservation)
+        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)
 
-        if not reservation.empty:
-            # DataFrame already contains localized times from repository
-            reservation_info = format_reservation_info(
-                reservation['day'].iloc[0],
-                reservation['time_from'].iloc[0],
-                reservation['time_to'].iloc[0],
-                reservation['place'].values[0]
-            )
-            bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)
-        else:
-            bot.edit_message_text(chat_id=chatId, message_id=messageId, text=RESERVATION_NOT_FOUND_MESSAGE)
+            
+
 
     def callback_in_my_reservation(self, call):
         if call.data == 'cb_back':
@@ -452,7 +496,7 @@ class TelegramBot:
                                 call.message.message_id,
                                 reply_markup=key)
         elif result:
-            if new_reservation.period <= 12:
+            if new_reservation.period < 12:
                 self.bot.set_state(user_id=call.from_user.id, state=BotStates.state_reservation_menu_time)
                 day = pd.to_datetime(result)
                 new_reservation.day = day
@@ -461,7 +505,7 @@ class TelegramBot:
                 self.bot.set_state(user_id=call.from_user.id, state=BotStates.state_reservation_menu_place)
                 day = pd.to_datetime(result)
                 new_reservation.day = day
-                new_reservation.time_from = dt.combine(new_reservation.day.date(), workday_start)
+                new_reservation.time_from = dt.combine(new_reservation.day.date(), config.workday_start)
                 new_reservation.time_to = new_reservation.time_from + timedelta(hours=new_reservation.period)
 
                 timeslots = self.reservations_db.get_available_timeslots(new_reservation)
@@ -620,14 +664,14 @@ class TelegramBot:
         elif call.data == 'pay_later':
             new_reservation.payed = False
             new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
-            new_reservation.payment_confiramtion_link = 'TODO'
+            new_reservation.payment_confiramtion_link = ''
             save_result_ok = self.reservations_db.create_reservation(new_reservation)
             if save_result_ok:
                 self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
                 self.bot.set_state(call.from_user.id, BotStates.state_start)
-                self.bot.send_message(call.message.chat.id, messages.format_reservation_confirm(new_reservation), parse_mode=ParseMode.MARKDOWN)
+                self.bot.send_message(call.message.chat.id, messages.format_reservation_created(new_reservation), parse_mode=ParseMode.MARKDOWN)
 
-                self.notify_admin('❇️ New reservation:\n'+messages.format_reservation_confirm(new_reservation))
+                self.notify_admin(messages.format_reservation_created_admin_notification(new_reservation))
         else:
             print('Unknown callback')
 
@@ -663,16 +707,32 @@ class TelegramBot:
             self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
             self.show_recap(self.bot, call, new_reservation)
         elif call.data == 'pay_done':
-            self.bot.set_state(call.from_user.id, BotStates.state_start)
             new_reservation.payed = False
             new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
-            new_reservation.payment_confiramtion_link = 'TODO'
+            new_reservation.payment_confiramtion_link = ''
             save_result_ok = self.reservations_db.create_reservation(new_reservation)
             if save_result_ok:
                 self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
                 self.bot.set_state(call.from_user.id, BotStates.state_start)
-                self.bot.send_message(call.message.chat.id, messages.format_reservation_confirm_and_payed(new_reservation), parse_mode=ParseMode.MARKDOWN)
 
-                self.notify_admin('❇️ New reservation:\n'+messages.format_reservation_confirm_and_payed(new_reservation))
+                self.bot.send_message(call.message.chat.id, messages.format_payment_confirm_request(new_reservation), parse_mode=ParseMode.MARKDOWN)
+                self.notify_admin(messages.format_reservation_created_admin_notification(new_reservation))
         else:
             print('Unknown callback')
+
+
+    def show_payment_confirm(self, bot:TeleBot, callback, new_reservation: Reservation):
+        markup = InlineKeyboardMarkup()
+        markup.row_width = 1
+        markup.add(
+            InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+        )
+
+        chatId = callback.message.chat.id
+        messageId = callback.message.message_id
+        bot.delete_message(chat_id=chatId, message_id=messageId)
+
+        bot.send_message(callback.message.chat.id, text=messages.PATMENT_CONFIRM_REQUEST , reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+
+    def callback_in_payment_confirm(self, call):
+        ...

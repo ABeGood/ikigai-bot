@@ -103,6 +103,15 @@ class Database:
             logger.error(f"Error finding available days: {str(e)}")
             return []
 
+    def get_last_reservation_by_telegram_id(self, telegram_id: str):
+        """Get the most recent reservation for a user"""
+        with self.get_db() as session:
+            reservation = session.query(models.Reservation)\
+                .filter(models.Reservation.telegram_id == telegram_id)\
+                .order_by(models.Reservation.created_at.desc())\
+                .first()
+            return reservation if reservation else None
+        
     def get_upcoming_reservations_by_telegram_id(self, telegram_id: str) -> List[models.Reservation]:
         """
         Get all upcoming reservations for a specific telegram user id.
@@ -144,6 +153,20 @@ class Database:
             logger.error(f"Error getting upcoming reservations: {str(e)}")
             return []
 
+    def get_unpaid_reservations_by_telegram_id(self, telegram_id: str):
+        """Get all unpaid reservations without payment confirmation for a user"""
+        with self.get_db() as session:
+            reservations = session.query(models.Reservation)\
+                .filter(
+                    models.Reservation.telegram_id == telegram_id,
+                    models.Reservation.payed == False,
+                    (models.Reservation.payment_confiramtion_link == None) | 
+                    (models.Reservation.payment_confiramtion_link == '')
+                )\
+                .order_by(models.Reservation.created_at.desc())\
+                .all()
+            return reservations if reservations else []
+        
     def get_reservations_for_date(self, target_date: date) -> List[models.Reservation]:
         """
         Get all reservations for a specific date.
@@ -506,6 +529,18 @@ class Database:
             logger.error(f"Error updating reservation {order_id}: {str(e)}")
             return False
 
+    def update_payment_confirmation(self, reservation_id: str, payment_confirmation_link: str):
+        """Update payment confirmation link for a reservation"""
+        with self.get_db() as session:
+            reservation = session.query(models.Reservation)\
+                .filter(models.Reservation.order_id == reservation_id)\
+                .first()
+            if reservation:
+                reservation.payment_confiramtion_link = payment_confirmation_link
+                session.commit()
+                return True
+            return False
+        
     def _validate_reservation_update(self, session: Session, reservation: models.Reservation) -> bool:
         """
         Validate that the updated reservation doesn't conflict with existing ones.

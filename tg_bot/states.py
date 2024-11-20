@@ -14,6 +14,7 @@ class BotStates(StatesGroup):
     state_reservation_menu_place = State()
     state_reservation_menu_recap = State()
     state_prepay = State()
+    state_payment_confirm = State()
 
     # My Reservations
     state_my_reservation_list = State()

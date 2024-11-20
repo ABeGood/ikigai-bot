@@ -30,6 +30,7 @@ MY_RESERVATIONS_MESSAGE_NO_RESERVATIONS = 'У Вас пока нет ни одн
 RESERVATION_NOT_FOUND_MESSAGE = "Резервация не найдена..."
 
 ADMIN_CHAT_MESSAGE = 'Оставьте свое сообщение здесь и мы перешлем его администратору.'
+PATMENT_CONFIRM_REQUEST = 'Пожалуйста, пришлите нам подтверждение об оплате. Это может быть скриншот с суммой и адресом перевода.'
 
 # Button texts
 NEW_RESERVATION_BUTTON = '🆕 Новая резервация'
@@ -54,6 +55,15 @@ HAIRSTYLE_BUTTON = 'Hairstyle'
 BROWS_BUTTON = 'Brows'
 
 
+def escape_markdown(text: str) -> str:
+    """Escape Markdown special characters"""
+    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    escaped_text = text
+    for char in special_chars:
+        escaped_text = escaped_text.replace(char, f'\{char}')
+    return escaped_text
+
+
 # WTF? Why here?
 def format_reservation_recap(reservation: Reservation):
     return f'''*Ваша резервация:*
@@ -75,7 +85,7 @@ def format_prepay(sum: float):
 '''
 
 
-def format_reservation_confirm(reservation: Reservation):
+def format_reservation_created(reservation: Reservation):
     return f'''🎉 *Ваша резервация подтверждена и ждет оплаты!*
 *Дата:* {reservation.day.strftime('%d.%m.%Y')}
 *Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
@@ -84,7 +94,30 @@ def format_reservation_confirm(reservation: Reservation):
 До встречи!
 '''
 
-def format_reservation_confirm_and_payed(reservation: Reservation):
+# def format_reservation_created_admin_notification(reservation: Reservation):
+#     return f'''
+# ❇️ New reservation:
+# Client: {reservation.name} ({reservation.telegram_id})
+# Day: {reservation.day.strftime('%d.%m.%Y')}
+# Time: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')} ({reservation.period} hours)
+# {'⚠️ not payed' if not reservation.payed else '✅ payed'}
+# '''
+
+def format_reservation_created_admin_notification(reservation: Reservation):
+    # Escape the name
+    escaped_name = escape_markdown(reservation.name)
+    user_link = f'[{escaped_name}](tg://user?id={reservation.telegram_id})'
+    
+    return f'''
+❇️ *New reservation:*
+Client: {user_link}
+Day: {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
+Time: {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')} \\({reservation.period} hours\\)
+Sum: {reservation.sum} CZK
+{'⚠️ not payed' if not reservation.payed else '✅ payed'}
+'''
+
+def format_reservation_created_and_payed(reservation: Reservation):
     return f'''🎉 *Ваша резервация подтверждена и оплачена!*
 *Дата:* {reservation.day.strftime('%d.%m.%Y')}
 *Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
@@ -93,11 +126,49 @@ def format_reservation_confirm_and_payed(reservation: Reservation):
 До встречи!
 '''
 
-def format_reservation_info(day, time_from, time_to, place):
+def format_payment_confirm_request(reservation: Reservation):
+    return f'''🎉 *Ваша резервация подтверждена!*
+*Дата:* {reservation.day.strftime('%d.%m.%Y')}
+*Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
+*Место:* {reservation.place}
+
+Пожалуйста, пришлите нам подтверждение об оплате. 
+Это может быть скриншот с суммой и адресом перевода.
+Его можно скинуть как фотку прямо сюда или позже через меню *"Мои резервации"*
+
+До встречи!
+'''
+
+def format_payment_confirm_receive(reservation: Reservation):   # TODO
+    return f'''✅ Спасибо! 
+Подтверждение оплаты получено для бронирования {reservation.order_id}.
+Мы проверим платеж и подтвердим вашу бронь.
+'''
+
+def format_payment_confirm_receive_admin_notofication(reservation: Reservation):   # TODO: 1. Add payment photo, 2. Confirm from tg
+    return f'''
+💳 Payment confirmation received:
+Client: {reservation.name} ({reservation.telegram_id})
+Day: {reservation.day.strftime('%d.%m.%Y')}
+Time: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')} ({reservation.period} hours)
+'''
+
+def format_no_pending_payments():
+    return f'''❌ У вас нет бронирований, ожидающих подтверждения оплаты.
+Если вы хотите отправить новое подтверждение оплаты для какого-то из ваших бронирований, это можно сделать в меню *"Мои резервации"*.
+'''
+
+def format_multiple_pending_payments():
+    return f'''❓ У вас несколько бронирований, ожидающих подтверждения оплаты.
+Пожалуйста, выберете к какому бронированию относится этот платеж в меню *"Мои резервации"*
+'''
+
+def format_reservation_info(reservation: Reservation):
     return f"""
-День: {day.strftime('%d.%m.%Y')}\n\
-Время: {time_from.strftime('%H:%M')} - {time_to.strftime('%H:%M')}\n\
-Место: {place}
+День: {reservation.day.strftime('%d.%m.%Y')}\n\
+Время: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}\n\
+Место: {reservation.place}
+Сумма: {reservation.sum}
 """
 
 def localize_from_db(dt):

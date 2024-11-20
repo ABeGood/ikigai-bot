@@ -45,6 +45,25 @@ class Reservation():
             'payed': self.payed,
             'payment_confiramtion_link': self.payment_confiramtion_link,
         }
+    
+    @classmethod
+    def from_dataframe_row(cls, row):
+        # Create instance with required parameters
+        reservation = cls(telegramId=row['telegram_id'], name=row['name'])
+        
+        # Set all other attributes from the row
+        reservation.order_id = row['order_id']
+        reservation.type = row['type']
+        reservation.place = row['place']
+        reservation.period = row['period']
+        reservation.day = row['day']
+        reservation.time_from = row['time_from']
+        reservation.time_to = row['time_to']
+        reservation.sum = row['sum']
+        reservation.payed = row['payed']
+        reservation.payment_confiramtion_link = row['payment_confiramtion_link']
+        
+        return reservation
 
 
     
