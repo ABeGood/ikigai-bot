@@ -408,8 +408,8 @@ class Database:
                     type=reservation_data['type'],
                     place=reservation_data['place'],
                     day=reservation_data['day'],
-                    time_from=self.localize_datetime(reservation_data['time_from']),
-                    time_to=self.localize_datetime(reservation_data['time_to']),
+                    time_from=reservation_data['time_from'],
+                    time_to=reservation_data['time_to'],
                     period=float(reservation_data['period']),  # Ensure period is float
                     sum=reservation_data['sum'],
                     payed=reservation_data.get('payed', False),
@@ -456,18 +456,11 @@ class Database:
                     logger.error(f"Reservation not found for order_id: {order_id}")
                     return None
                 
-                # Store reservation details before deletion
-                deleted_reservation = {
-                    'time_from': self.localize_datetime(reservation.time_from),
-                    'order_id': reservation.order_id,
-                    'created_at': self.localize_datetime(reservation.created_at)
-                }
-                
                 # Delete the reservation
                 session.delete(reservation)
                 session.commit()
                 
-                return deleted_reservation
+                return reservation
                 
         except SQLAlchemyError as e:
             logger.error(f"Database error deleting reservation {order_id}: {str(e)}")
@@ -511,9 +504,7 @@ class Database:
                         if key in ['time_from', 'time_to']:
                             if value:
                                 # Ensure timezone awareness
-                                value = self.localize_datetime(
-                                    datetime.fromisoformat(value) if isinstance(value, str) else value
-                                )
+                                value = datetime.fromisoformat(value) if isinstance(value, str) else value
                         elif key == 'day':
                             if value:
                                 # Convert string date to date object if needed
@@ -810,16 +801,6 @@ class Database:
             session.rollback()
             raise
 
-    @staticmethod
-    def localize_datetime(dt: datetime) -> datetime:
-        if dt is None:
-            return None
-        
-        if isinstance(dt, datetime):
-            if dt.tzinfo is None:
-                dt = LOCAL_TIMEZONE.localize(dt)
-            return dt.astimezone(LOCAL_TIMEZONE)
-        return dt
     
     def to_dataframe(self) -> pd.DataFrame:
         """Convert all reservations to a pandas DataFrame with localized times"""
@@ -838,15 +819,15 @@ class Database:
                 for r in reservations:
                     data.append({
                         'id': r.id,
-                        'created_at': self.localize_datetime(r.created_at),
+                        'created_at': r.created_at,
                         'order_id': r.order_id,
                         'telegram_id': r.telegram_id,
                         'name': r.name,
                         'type': r.type,
                         'place': r.place, 
                         'day': r.day,
-                        'time_from': self.localize_datetime(r.time_from),
-                        'time_to': self.localize_datetime(r.time_to),
+                        'time_from': r.time_from,
+                        'time_to': r.time_to,
                         'period': r.period,
                         'sum': r.sum,
                         'payed': r.payed,

@@ -6,9 +6,10 @@ from datetime import datetime as dt, timedelta
 import json
 from time import sleep
 import time
+from typing import Optional
 
 from telebot import custom_filters, TeleBot
-from tg_bot.states import BotStates, change_state, get_previous_state
+from tg_bot.states import BotStates
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 from telegram_bot_calendar import DetailedTelegramCalendar, WMonthTelegramCalendar, LSTEP
 from telegram.constants import ParseMode
@@ -43,13 +44,23 @@ class TelegramBot:
 
     def __init__(self, bot_token:str, reservations_db:Database) -> None:
         self.state_storage = StateMemoryStorage()
-        self.bot = telebot.TeleBot(token=bot_token, state_storage=self.state_storage)
         self.reservations_db = reservations_db
+        self.bot = telebot.TeleBot(token=bot_token, state_storage=self.state_storage)
 
         self.bot.add_custom_filter(custom_filters.StateFilter(self.bot))
         self.register_handlers()
         self.register_callback_handlers()
 
+    def set_state(self, user_id: int, new_state: State, store_prev_state: bool = True):
+        if store_prev_state:
+            current_state = self.bot.get_state(user_id)
+            if current_state:
+                self.bot.add_data(user_id=user_id, prev_state=current_state)
+        self.bot.set_state(user_id, new_state)
+
+    def get_previous_state(self, user_id: int) -> Optional[State]:
+        state_data = self.bot.retrieve_data(user_id)
+        return state_data.data.get('prev_state') if state_data else None
 
     def notify_admin(self, text:str):
         self.bot.send_message(chat_id=config.admin_chat_id, text=text, parse_mode=ParseMode.MARKDOWN_V2)
@@ -218,8 +229,7 @@ class TelegramBot:
 
     def start(self, message):
         # chat_id = message.chat.id
-        change_state(bot=self.bot, user_id=message.from_user.id, new_state=BotStates.state_main_menu)
-        # self.bot.set_state(user_id=message.from_user.id, state=BotStates.state_main_menu)
+        self.set_state(user_id=message.from_user.id, new_state=BotStates.state_main_menu)
         self.show_main_menu(self.bot, message)
 
     def admin(self, message):
@@ -272,14 +282,11 @@ class TelegramBot:
 
     def callback_in_my_reservations(self, call):
         if call.data == 'cb_back':
-            # self.bot.set_state(call.from_user.id, BotStates.state_main_menu)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_main_menu)
+            self.set_state(call.from_user.id, BotStates.state_main_menu)
             self.show_main_menu(self.bot, call.message)
         else:
-            # self.bot.set_state(call.from_user.id, BotStates.state_my_reservation)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_my_reservation)
-            reservation_table = self.reservations_db.to_dataframe()
-            self.show_my_reservation(self.bot, call, reservations_table=reservation_table)
+            self.set_state(call.from_user.id, BotStates.state_my_reservation)
+            self.show_my_reservation(self.bot, call)
 
 
     def show_main_menu(self, bot:TeleBot, message):
@@ -297,16 +304,13 @@ class TelegramBot:
         global new_reservation
         if call.data == "cb_new_reservation":
             new_reservation = Reservation(telegramId=call.from_user.id, name=f'{call.from_user.full_name} ({call.from_user.username})')
-            # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_type)
+            self.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
             self.show_reservation_type(self.bot, call)
         elif call.data == 'cb_my_reservations':
-            # self.bot.set_state(call.from_user.id, BotStates.state_my_reservation_list)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_my_reservation_list)
+            self.set_state(call.from_user.id, BotStates.state_my_reservation_list)
             self.show_my_reservations(call)
         elif call.data == "cb_info":
-            # self.bot.set_state(call.from_user.id, BotStates.state_info)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_info)
+            self.set_state(call.from_user.id, BotStates.state_info)
             self.show_info(self.bot, call)
 
 
@@ -321,8 +325,7 @@ class TelegramBot:
 
     def callback_in_info(self, call):
         if call.data == 'cb_back':
-            # self.bot.set_state(call.from_user.id, BotStates.state_main_menu)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_main_menu)
+            self.set_state(call.from_user.id, BotStates.state_main_menu)
             self.show_main_menu(self.bot, call.message)
 
 
@@ -350,13 +353,11 @@ class TelegramBot:
 
     def callback_in_my_reservation(self, call):
         if call.data == 'cb_back':
-            # self.bot.set_state(call.from_user.id, BotStates.state_my_reservation_list)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_my_reservation_list)
+            self.set_state(call.from_user.id, BotStates.state_my_reservation_list)
             self.show_my_reservations(call)
         elif call.data.startswith('pay_'):
             order_id = '_'.join(call.data.split('_')[1:])
-            # self.bot.set_state(call.from_user.id, BotStates.state_pay)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_pay)
+            self.set_state(call.from_user.id, BotStates.state_pay)
             reservation_to_pay = self.reservations_db.get_reservation_by_order_id(order_id)
             self.show_pay(self.bot, callback=call, reservation=reservation_to_pay)
 
@@ -364,8 +365,7 @@ class TelegramBot:
             order_id = '_'.join(call.data.split('_')[1:])
             deleted_reservation = self.reservations_db.delete_reservation(order_id)
             ## AG: TODO logics here
-            # self.bot.set_state(call.from_user.id, BotStates.state_my_reservation_list)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_my_reservation_list)
+            self.set_state(call.from_user.id, BotStates.state_my_reservation_list)
             self.show_my_reservations(call)
 
             admin_notification = messages.format_reservation_deleted_admin_notification(deleted_reservation)
@@ -388,14 +388,12 @@ class TelegramBot:
     def callback_in_reservation_menu_type(self, call):
         global new_reservation
         if call.data == 'cb_back':
-            # self.bot.set_state(call.from_user.id, BotStates.state_main_menu)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_main_menu)
+            self.set_state(call.from_user.id, BotStates.state_main_menu)
             self.show_main_menu(self.bot, call.message)
         else:
             spec = call.data[0]
             new_reservation.type = spec
-            # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_hours)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_hours)
+            self.set_state(call.from_user.id, BotStates.state_reservation_menu_hours)
             self.show_hours(self.bot, call)
 
 
@@ -418,20 +416,17 @@ class TelegramBot:
     def callback_in_reservation_menu_hours(self, call):
         global new_reservation
         if call.data == 'cb_back':
-            # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_type)
+            self.set_state(call.from_user.id, BotStates.state_reservation_menu_type)
             self.show_reservation_type(self.bot, call)
         elif call.data == 'talk_to_admin':
             # bot.send_message(call.message.chat.id, 'Please contact the administrator for this request.')
-            # self.bot.set_state(call.from_user.id, BotStates.state_admin_chat)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_admin_chat)
+            self.set_state(call.from_user.id, BotStates.state_admin_chat)
             self.show_admin_chat(self.bot, call)
         else:
             hours = int(call.data)
             new_reservation.period = hours
             new_reservation.sum = config.prices[new_reservation.type] * new_reservation.period  # AG TODO: Move to Reservation class
-            # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_date)
+            self.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
             self.show_date(self.bot, call, new_reservation)
 
 
@@ -448,8 +443,7 @@ class TelegramBot:
 
     def callback_in_admin_chat(self, call):
         if call.data == 'cb_back':
-            # self.bot.set_state(call.from_user.id, BotStates.state_main_menu)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_main_menu)
+            self.set_state(call.from_user.id, BotStates.state_main_menu)
             self.show_main_menu(self.bot, call.message)
         
         # Catch and resend message here:
@@ -494,8 +488,7 @@ class TelegramBot:
 
     def callback_in_reservation_menu_date(self, call):
         if call.data == 'cb_back':
-            # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_hours)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_hours)
+            self.set_state(call.from_user.id, BotStates.state_reservation_menu_hours)
             self.show_hours(self.bot, call)
             return
         
@@ -508,8 +501,7 @@ class TelegramBot:
                                 reply_markup=key)
         elif result:
             if new_reservation.period < 12:
-                # self.bot.set_state(user_id=call.from_user.id, state=BotStates.state_reservation_menu_time)
-                change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_time)
+                self.set_state(user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_time)
                 day = pd.to_datetime(result)
                 new_reservation.day = day
                 self.show_time(self.bot, call, new_reservation)
@@ -529,9 +521,7 @@ class TelegramBot:
 
                 new_reservation.available_places = available_places[0]
                 
-
-                # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
-                change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_place)
+                self.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
                 self.show_place(self.bot, call, new_reservation=new_reservation)
 
 
@@ -606,8 +596,7 @@ class TelegramBot:
         global new_reservation
         if call.data == 'cb_back':
             new_reservation.day = ''  # TODO
-            # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_date)
+            self.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
             self.show_date(self.bot, call, new_reservation)
         else:
             callback_data = call.data.split('_p')
@@ -618,8 +607,7 @@ class TelegramBot:
             new_reservation.time_from = dt.combine(new_reservation.day.date(), time.time())
             new_reservation.time_to = new_reservation.time_from + timedelta(hours=new_reservation.period)
 
-            # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_place)
+            self.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
             self.show_place(self.bot, call, new_reservation=new_reservation)
 
 
@@ -639,15 +627,13 @@ class TelegramBot:
     def callback_in_reservation_menu_place(self, call):
         global new_reservation
         if call.data == 'cb_back':
-            # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_time)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_time)
+            self.set_state(call.from_user.id, BotStates.state_reservation_menu_time)
             self.show_time(self.bot, call, new_reservation, going_back=True)
         else:
             place = int(call.data.split('_')[1])
             new_reservation.place = place
 
-            # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_recap)
+            self.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
             self.show_recap(self.bot, call, new_reservation=new_reservation)
 
 
@@ -672,12 +658,10 @@ class TelegramBot:
     def callback_in_reservation_menu_recap(self, call):
         global new_reservation
         if call.data == 'cb_back':
-            # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_place)
+            self.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
             self.show_place(self.bot, call, new_reservation)
         elif call.data == 'pay_now':
-            # self.bot.set_state(call.from_user.id, BotStates.state_pay)
-            change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_pay)
+            self.set_state(call.from_user.id, BotStates.state_pay)
             self.show_pay(self.bot, call, new_reservation)
         elif call.data == 'pay_later':
             new_reservation.payed = False
@@ -686,8 +670,7 @@ class TelegramBot:
             save_result_ok = self.reservations_db.create_reservation(new_reservation)
             if save_result_ok:
                 self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
-                # self.bot.set_state(call.from_user.id, BotStates.state_start)
-                change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_start)
+                self.set_state(call.from_user.id, BotStates.state_start)
                 self.bot.send_message(call.message.chat.id, messages.format_reservation_created(new_reservation), parse_mode=ParseMode.MARKDOWN)
 
                 self.notify_admin(messages.format_reservation_created_admin_notification(new_reservation))
@@ -722,16 +705,13 @@ class TelegramBot:
 
     def callback_in_pay(self, call): 
         global new_reservation
-        prev_state = get_previous_state(bot=self.bot, user_id=call.from_user.id)
         if call.data == 'cb_back':
-            # AG TODO: Rework, ugly crutch
-            if prev_state == BotStates.state_reservation_menu_recap:
-                # self.bot.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
-                change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_reservation_menu_recap)
+            prev_state = self.get_previous_state(call.from_user.id)
+            if prev_state == BotStates.state_reservation_menu_recap.name:
+                self.set_state(call.from_user.id, BotStates.state_reservation_menu_recap)
                 self.show_recap(self.bot, call, new_reservation)
-            elif prev_state == BotStates.state_my_reservation:
-                # self.bot.set_state(call.from_user.id, BotStates.state_my_reservation)
-                change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_my_reservation_list)
+            elif prev_state == BotStates.state_my_reservation.name:
+                self.set_state(call.from_user.id, BotStates.state_my_reservation_list)
                 self.show_my_reservations(call)
         elif call.data == 'pay_done':
             new_reservation.payed = False
@@ -740,8 +720,7 @@ class TelegramBot:
             save_result_ok = self.reservations_db.create_reservation(new_reservation)
             if save_result_ok:
                 self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
-                # self.bot.set_state(call.from_user.id, BotStates.state_start)
-                change_state(bot=self.bot, user_id=call.from_user.id, new_state=BotStates.state_start)
+                self.set_state(call.from_user.id, BotStates.state_start)
 
                 self.bot.send_message(call.message.chat.id, messages.format_payment_confirm_request(new_reservation), parse_mode=ParseMode.MARKDOWN)
                 self.notify_admin(messages.format_reservation_created_admin_notification(new_reservation))
