@@ -112,6 +112,17 @@ class Database:
                 .first()
             return reservation if reservation else None
         
+    def get_reservation_by_order_id(self, order_id: str) -> Optional[models.Reservation]:
+        """Get a reservation by its order ID"""
+        try:
+            with self.get_db() as session:
+                return session.query(models.Reservation)\
+                    .filter(models.Reservation.order_id == order_id)\
+                    .first()
+        except Exception as e:
+            logger.error(f"Error getting reservation by order ID: {str(e)}")
+            return None
+        
     def get_upcoming_reservations_by_telegram_id(self, telegram_id: str) -> List[models.Reservation]:
         """
         Get all upcoming reservations for a specific telegram user id.
@@ -811,10 +822,7 @@ class Database:
         return dt
     
     def to_dataframe(self) -> pd.DataFrame:
-        """
-        Convert all reservations to a pandas DataFrame with localized times
-        Returns DataFrame with all reservations or empty DataFrame if none found
-        """
+        """Convert all reservations to a pandas DataFrame with localized times"""
         try:
             with self.get_db() as session:
                 reservations = session.query(models.Reservation).all()
@@ -822,7 +830,8 @@ class Database:
                 if not reservations:
                     return pd.DataFrame(columns=[
                         'id', 'created_at', 'order_id', 'telegram_id', 'name',
-                        'type', 'place', 'day', 'time_from', 'time_to', 'period', 'payed'
+                        'type', 'place', 'day', 'time_from', 'time_to', 'period',
+                        'sum', 'payed', 'payment_confiramtion_link'
                     ])
                 
                 data = []
@@ -835,21 +844,23 @@ class Database:
                         'name': r.name,
                         'type': r.type,
                         'place': r.place, 
-                        'day': r.day,  # Date doesn't need timezone conversion
+                        'day': r.day,
                         'time_from': self.localize_datetime(r.time_from),
                         'time_to': self.localize_datetime(r.time_to),
                         'period': r.period,
-                        'payed': r.payed
+                        'sum': r.sum,
+                        'payed': r.payed,
+                        'payment_confiramtion_link': r.payment_confiramtion_link
                     })
                 
                 return pd.DataFrame(data)
-                
+            
         except Exception as e:
             logger.error(f"Error converting to dataframe: {str(e)}")
-            # Return empty DataFrame with correct columns on error
             return pd.DataFrame(columns=[
                 'id', 'created_at', 'order_id', 'telegram_id', 'name',
-                'type', 'place', 'day', 'time_from', 'time_to', 'period', 'payed'
+                'type', 'place', 'day', 'time_from', 'time_to', 'period',
+                'sum', 'payed', 'payment_confiramtion_link'
             ])
 
 class DatabaseError(Exception):

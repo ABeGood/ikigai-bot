@@ -38,6 +38,7 @@ MY_RESERVATIONS_BUTTON = '🆕 Мои резервации'
 ABOUT_US_BUTTON = '⏺️ О нас'
 BACK_BUTTON = '🔙 Назад'
 PAY_NOW_BUTTON = 'Оплатить 🪙'
+PAY_LINK_BUTTON = 'Ссылка для оплаты 🪙'
 PAY_DONE_BUTTON = 'Готово ✅'
 PAY_URL = 'http://revolut.me/yuliyagb1b'
 PAY_LATER_BUTTON = 'Оплатить позже ⌛'
@@ -76,11 +77,9 @@ def format_reservation_recap(reservation: Reservation):
 
 def format_prepay(sum: float):
     return f'''Мы принимаем оплату онлайн-банк *Revolut*.
-- Кнопка *"Оплатить 🪙"* неренаправит Вас на *страницу оплаты*.
 - *Сумма*: *{sum}* CZK
-- После оплаты нажмите "Готово ✅".
 
-Нам будет удобно, если в платеже Вы укажите *своё имя*.
+После оплаты, пожалуйста, пришлите подтверждение TODO!!!
 Спасибо! ✨
 '''
 
@@ -115,6 +114,21 @@ Day: {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
 Time: {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')} \\({reservation.period} hours\\)
 Sum: {reservation.sum} CZK
 {'⚠️ not payed' if not reservation.payed else '✅ payed'}
+'''
+
+def format_reservation_deleted_admin_notification(reservation: Reservation):
+    # Escape the name
+    escaped_name = escape_markdown(reservation.name)
+    user_link = f'[{escaped_name}](tg://user?id={reservation.telegram_id})'
+    
+    return f'''
+❌ *Reservation deleted:*
+Client: {user_link}
+Day: {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
+Time: {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')} \\({reservation.period} hours\\)
+Sum: {reservation.sum} CZK
+Order ID: `{reservation.order_id}`
+{'⚠️ was not payed' if not reservation.payed else '💰 was payed'}
 '''
 
 def format_reservation_created_and_payed(reservation: Reservation):
@@ -163,10 +177,23 @@ def format_multiple_pending_payments():
 Пожалуйста, выберете к какому бронированию относится этот платеж в меню *"Мои резервации"*
 '''
 
+def get_status_string(reservation: Reservation):
+    # Set status emoji based on payment state
+    if not reservation.payment_confiramtion_link:
+        status = "💳 Ожидает оплаты"
+    elif not reservation.payed:
+        status = "⌛ Ожидает подтверждения оплаты администратором"
+    else:
+        status = "✅ Оплачено"
+    return status
+
 def format_reservation_info(reservation: Reservation):
+    
+        
     return f"""
-День: {reservation.day.strftime('%d.%m.%Y')}\n\
-Время: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}\n\
+{get_status_string(reservation)}
+День: {reservation.day.strftime('%d.%m.%Y')}
+Время: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
 Место: {reservation.place}
 Сумма: {reservation.sum}
 """
