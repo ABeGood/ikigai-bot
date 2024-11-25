@@ -15,7 +15,7 @@ from functools import lru_cache
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from db import models
-from tg_bot.config import places, workday_start, workday_end
+from tg_bot.config import places, workday_start, workday_end, LOCAL_TIMEZONE
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -136,7 +136,7 @@ class Database:
         try:
             with self.get_db() as session:
                 # Get current datetime in UTC
-                current_datetime = datetime.now(pytz.UTC)
+                current_datetime = datetime.now(LOCAL_TIMEZONE)
                 current_date = current_datetime.date()
                 
                 # Query upcoming reservations
@@ -270,13 +270,13 @@ class Database:
                 )
                 
                 # Current time for today's checks
-                now = datetime.now(pytz.UTC)
+                now = datetime.now(LOCAL_TIMEZONE)
                 
                 # Iterate through time slots
                 current_time : pd.Timestamp = day_start
                 while current_time + reservation_duration <= day_end:
                     # Skip past times for today
-                    if new_reservation.day.date() == now.date() and pytz.UTC.localize(current_time.to_pydatetime()) <= now:
+                    if new_reservation.day.date() == now.date() and LOCAL_TIMEZONE.localize(current_time.to_pydatetime()) <= now:
                         current_time += slot_duration
                         continue
                     
@@ -288,8 +288,8 @@ class Database:
                         is_available = True
                         # Check for overlapping reservations
                         for _, reservation in reservations_df.iterrows():
-                            if (pytz.UTC.localize(current_time) < reservation['time_to'] and 
-                                pytz.UTC.localize(slot_end_time) > reservation['time_from'] and 
+                            if (LOCAL_TIMEZONE.localize(current_time) < reservation['time_to'] and 
+                                LOCAL_TIMEZONE.localize(slot_end_time) > reservation['time_from'] and 
                                 place == reservation['place']):
                                 is_available = False
                                 break
@@ -635,7 +635,7 @@ class Database:
         return overlapping is None
 
     def _find_available_days(self, session: Session, new_reservation: 'Reservation') -> List[datetime]:
-        now = datetime.now(pytz.UTC)
+        now = datetime.now(LOCAL_TIMEZONE)
         end_date = now + timedelta(days=self.config.workday_settings['lookforward_days'])
         
         # Get existing reservations
@@ -744,7 +744,7 @@ class Database:
         end_time = day.replace(hour=workday_end, minute=0)
         
         while current_time + duration <= end_time:
-            if current_time <= datetime.now(pytz.UTC):
+            if current_time <= datetime.now(LOCAL_TIMEZONE):
                 current_time += timedelta(minutes=30)
                 continue
                 
@@ -817,8 +817,8 @@ class Database:
         
         if isinstance(dt, datetime):
             if dt.tzinfo is None:
-                dt = pytz.UTC.localize(dt)
-            return dt.astimezone(pytz.timezone('UTC'))
+                dt = LOCAL_TIMEZONE.localize(dt)
+            return dt.astimezone(LOCAL_TIMEZONE)
         return dt
     
     def to_dataframe(self) -> pd.DataFrame:

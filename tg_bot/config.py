@@ -1,5 +1,6 @@
 from typing import Dict, Tuple
 import datetime
+import pytz
 
 stride_mins = 30
 time_step = 30  # min
@@ -25,4 +26,5 @@ period_buttons = {
 }
 
 admin_chat_id = -1002217216611
-LOCAL_TIMEZONE = 'Europe/Prague'
+# LOCAL_TIMEZONE = 'Europe/Prague'
+LOCAL_TIMEZONE = pytz.timezone('Europe/Prague')

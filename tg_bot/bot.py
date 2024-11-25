@@ -545,7 +545,7 @@ class TelegramBot:
         # Create time slot buttons
         buttons = []
         
-        now = dt.now(pytz.UTC)
+        now = dt.now(config.LOCAL_TIMEZONE)
         workday_start = config.workday_start
         workday_end = config.workday_end
         
@@ -557,7 +557,7 @@ class TelegramBot:
             if buffer_time.time() < workday_start:
                 time_start_search = dt.combine(date, time(workday_start.hour, 0))
                 # Make timezone-aware
-                time_start_search = pytz.UTC.localize(time_start_search)
+                time_start_search = config.LOCAL_TIMEZONE.localize(time_start_search)
             else:
                 # Calculate minutes since start of day
                 minutes_since_midnight = buffer_time.hour * 60 + buffer_time.minute
@@ -565,18 +565,18 @@ class TelegramBot:
                 next_slot_minutes = math.ceil(minutes_since_midnight / config.stride_mins) * config.stride_mins
                 # Convert back to datetime and make timezone-aware
                 naive_time = dt.combine(date, time(0, 0)) + timedelta(minutes=next_slot_minutes)
-                time_start_search = pytz.UTC.localize(naive_time)
+                time_start_search = config.LOCAL_TIMEZONE.localize(naive_time)
                 
                 # If calculated time is before workday start, use workday start
                 if time_start_search.time() < workday_start:
-                    time_start_search = pytz.UTC.localize(dt.combine(date, time(workday_start.hour, 0)))
+                    time_start_search = config.LOCAL_TIMEZONE.localize(dt.combine(date, time(workday_start.hour, 0)))
         else:
             # If not today, start from beginning of workday
             naive_time = dt.combine(date, time(workday_start.hour, 0))
-            time_start_search = pytz.UTC.localize(naive_time)
+            time_start_search = config.LOCAL_TIMEZONE.localize(naive_time)
 
         # Calculate end of workday considering reservation period
-        workday_end = dt.combine(date, config.workday_end) - timedelta(hours=new_reservation.period)
+        # workday_end = dt.combine(date, config.workday_end) - timedelta(hours=new_reservation.period)
         
         timeslots = self.reservations_db.get_available_timeslots(new_reservation)
         available_places = []
