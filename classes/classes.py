@@ -13,7 +13,8 @@ class Reservation():
     time_to : datetime
     sum : float
     payed : bool
-    payment_confiramtion_link : str
+    payment_confirmation_link : str
+    payment_confirmation_file_id : str
     available_places : list[int]
 
     def __init__(self, telegramId:str, name:str) -> None:
@@ -28,7 +29,8 @@ class Reservation():
         self.time_to = None
         self.sum = None
         self.payed = None
-        self.payment_confiramtion_link = None
+        self.payment_confirmation_link = None
+        self.payment_confirmation_file_id = None
 
     def to_dict(self) -> dict:
         return {
@@ -43,7 +45,8 @@ class Reservation():
             'time_to': self.time_to,
             'sum': self.sum,
             'payed': self.payed,
-            'payment_confiramtion_link': self.payment_confiramtion_link,
+            'payment_confirmation_link': self.payment_confirmation_link,
+            'payment_confirmation_file_id' : self.payment_confirmation_file_id
         }
     
     @classmethod
@@ -61,9 +64,7 @@ class Reservation():
         reservation.time_to = row['time_to']
         reservation.sum = row['sum']
         reservation.payed = row['payed']
-        reservation.payment_confiramtion_link = row['payment_confiramtion_link']
+        reservation.payment_confirmation_link = row['payment_confirmation_link']
+        reservation.payment_confirmation_file_id = row['payment_confirmation_file_id']
         
         return reservation
-
-
-    

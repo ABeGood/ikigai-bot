@@ -38,6 +38,7 @@ MY_RESERVATIONS_BUTTON = '🆕 Мои резервации'
 ABOUT_US_BUTTON = '⏺️ О нас'
 BACK_BUTTON = '🔙 Назад'
 PAY_NOW_BUTTON = 'Оплатить 🪙'
+CHANGE_PAYCHECK_BUTTON = 'Изменить чек 🪙'
 PAY_LINK_BUTTON = 'Ссылка для оплаты 🪙'
 PAY_DONE_BUTTON = 'Готово ✅'
 PAY_URL = 'http://revolut.me/yuliyagb1b'
@@ -75,11 +76,27 @@ def format_reservation_recap(reservation: Reservation):
 '''
 
 
-def format_prepay(sum: float):
+def format_pay_from_recap(sum: float):
     return f'''Мы принимаем оплату онлайн-банк *Revolut*.
 - *Сумма*: *{sum}* CZK
 
+FROM RECAP
 После оплаты, пожалуйста, пришлите подтверждение TODO!!!
+Спасибо! ✨
+'''
+
+
+def format_pay_from_my_reservations(sum: float):
+    return f'''Мы принимаем оплату онлайн-банк *Revolut*.
+- *Сумма*: *{sum}* CZK
+
+FROM MY RESERVATIONS
+После оплаты, пожалуйста, пришлите подтверждение TODO!!!
+Спасибо! ✨
+'''
+
+def format_change_paycheck():
+    return f'''Если вы хотите заменить чек для этой резервации просто пришлите ешо сюда! TODO!!!
 Спасибо! ✨
 '''
 
@@ -109,6 +126,7 @@ def format_reservation_created_admin_notification(reservation: Reservation):
     
     return f'''
 ❇️ *New reservation:*
+
 Client: {user_link}
 Day: {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
 Time: {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')} \\({reservation.period} hours\\)
@@ -121,14 +139,16 @@ def format_reservation_deleted_admin_notification(reservation: Reservation):
     escaped_name = escape_markdown(reservation.name)
     user_link = f'[{escaped_name}](tg://user?id={reservation.telegram_id})'
     
+    # int(reservation.period)  <- Kostyl
     return f'''
 ❌ *Reservation deleted:*
+
 Client: {user_link}
 Day: {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
-Time: {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')} \\({reservation.period} hours\\)
-Sum: {reservation.sum} CZK
-Order ID: `{reservation.order_id}`
-{'⚠️ was not payed' if not reservation.payed else '💰 was payed'}
+Time: {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')} \\({int(reservation.period)} hours\\)
+Sum: {escape_markdown(str(reservation.sum))} CZK
+Order ID: `{escape_markdown(reservation.order_id)}`
+{'✅ Was not payed' if not reservation.payed else '⚠️ Was payed'}
 '''
 
 def format_reservation_created_and_payed(reservation: Reservation):
@@ -160,12 +180,12 @@ def format_payment_confirm_receive(reservation: Reservation):   # TODO
 '''
 
 def format_payment_confirm_receive_admin_notofication(reservation: Reservation):   # TODO: 1. Add payment photo, 2. Confirm from tg
-    return f'''
+    return escape_markdown(f'''
 💳 Payment confirmation received:
 Client: {reservation.name} ({reservation.telegram_id})
 Day: {reservation.day.strftime('%d.%m.%Y')}
 Time: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')} ({reservation.period} hours)
-'''
+''')
 
 def format_no_pending_payments():
     return f'''❌ У вас нет бронирований, ожидающих подтверждения оплаты.
@@ -179,7 +199,7 @@ def format_multiple_pending_payments():
 
 def get_status_string(reservation: Reservation):
     # Set status emoji based on payment state
-    if not reservation.payment_confiramtion_link:
+    if not reservation.payment_confirmation_link:
         status = "💳 Ожидает оплаты"
     elif not reservation.payed:
         status = "⌛ Ожидает подтверждения оплаты администратором"

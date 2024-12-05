@@ -18,4 +18,5 @@ class Reservation(declarative_base()):
     time_to = Column(DateTime(timezone=True))    # Changed from Time to DateTime with timezone
     sum = Column(Float)
     payed = Column(Boolean)
-    payment_confiramtion_link = Column(String)
+    payment_confirmation_link = Column(String)
+    payment_confirmation_file_id = Column(String)

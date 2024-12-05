@@ -52,10 +52,16 @@ class TelegramBot:
         self.register_callback_handlers()
 
     def set_state(self, user_id: int, new_state: State, store_prev_state: bool = True):
+        current_state = self.bot.get_state(user_id)
         if store_prev_state:
-            current_state = self.bot.get_state(user_id)
             if current_state:
                 self.bot.add_data(user_id=user_id, prev_state=current_state)
+
+        if current_state == BotStates.state_pay.name:  # AG: mb something better?
+            state_data = self.bot.retrieve_data(user_id)
+            if state_data and 'pending_payment_reservation' in state_data.data:
+                self.bot.add_data(user_id=user_id, pending_payment_reservation=None)
+
         self.bot.set_state(user_id, new_state)
 
     def get_previous_state(self, user_id: int) -> Optional[State]:
@@ -110,6 +116,8 @@ class TelegramBot:
             content_types=['photo'],
         )
         def handle_payment_photo(message):
+            # AG TODO: Set to start state
+            # AG TODO: Replace old screenshot by new
             photo = message.photo[-1]
             file_id = photo.file_id
             file_info = self.bot.get_file(file_id)
@@ -118,19 +126,32 @@ class TelegramBot:
             # Construct the direct download link (valid for 1 hour)
             file_url = f"https://api.telegram.org/file/bot{self.bot.token}/{file_path}"
 
+            state_data = self.bot.retrieve_data(message.from_user.id)
+            reservation_to_pay = state_data.data.get('pending_payment_reservation', None) if state_data.data else None
+            if reservation_to_pay:
+                payed_reservation = self.reservations_db.update_payment_confirmation(reservation_to_pay, file_url, file_id)
+                
+                # Notify user
+                self.bot.reply_to(message, text=messages.format_payment_confirm_receive(payed_reservation))
+
+                # Notify admin
+                admin_notification = messages.format_payment_confirm_receive_admin_notofication(payed_reservation)
+                self.notify_admin(admin_notification)
+                return
+
             last_reservation = self.reservations_db.get_last_reservation_by_telegram_id(str(message.from_user.id))
 
-            if last_reservation and not last_reservation.payment_confiramtion_link and not last_reservation.payed:
+            if last_reservation and not last_reservation.payment_confirmation_link and not last_reservation.payed:
                 # Case 1: Last reservation exists and needs payment confirmation
 
                 # Add payment confirmation to the last reservation
-                self.reservations_db.update_payment_confirmation(last_reservation.order_id, file_url)
+                payed_reservation = self.reservations_db.update_payment_confirmation(str(last_reservation.order_id), file_url, file_id)
                 
                 # Notify user
-                self.bot.reply_to(message, text=messages.format_payment_confirm_receive(last_reservation))
+                self.bot.reply_to(message, text=messages.format_payment_confirm_receive(payed_reservation))
 
                 # Notify admin
-                admin_notification = messages.format_payment_confirm_receive_admin_notofication(last_reservation)
+                admin_notification = messages.format_payment_confirm_receive_admin_notofication(payed_reservation)
                 self.notify_admin(admin_notification)
 
             else:
@@ -144,7 +165,7 @@ class TelegramBot:
                 elif len(unpaid_reservations) == 1:
                     # Only one reservation needs confirmation
                     reservation = unpaid_reservations[0]
-                    self.reservations_db.update_payment_confirmation(reservation.order_id, file_url)
+                    self.reservations_db.update_payment_confirmation(str(reservation.order_id), file_url, file_id)
                     
                     self.bot.reply_to(message, messages.format_payment_confirm_receive(reservation))
                     
@@ -273,12 +294,48 @@ class TelegramBot:
                 callback_data='cb_back'
             ))
 
-            self.bot.edit_message_text(
-                chat_id=callback.message.chat.id,
-                message_id=callback.message.message_id,
-                text=reservation_message_text,
-                reply_markup=markup
-            )
+            # self.bot.edit_message_text(
+            #     chat_id=callback.message.chat.id,
+            #     message_id=callback.message.message_id,
+            #     text=reservation_message_text,
+            #     reply_markup=markup
+            # )
+            try:
+                # Check if the message has a photo
+                if hasattr(callback.message, 'photo') and callback.message.photo:
+                    # If it's a photo message, delete it and send new text message
+                    self.bot.delete_message(
+                        chat_id=callback.message.chat.id,
+                        message_id=callback.message.message_id
+                    )
+                    self.bot.send_message(
+                        chat_id=callback.message.chat.id,
+                        text=reservation_message_text,
+                        reply_markup=markup
+                    )
+                else:
+                    # If it's a text message, edit it
+                    self.bot.edit_message_text(
+                        chat_id=callback.message.chat.id,
+                        message_id=callback.message.message_id,
+                        text=reservation_message_text,
+                        reply_markup=markup
+                    )
+            except Exception as e:
+                # If any error occurs, delete the old message and send a new one
+                logging.error(f"Error updating message: {e}")
+                try:
+                    self.bot.delete_message(
+                        chat_id=callback.message.chat.id,
+                        message_id=callback.message.message_id
+                    )
+                    self.bot.send_message(
+                        chat_id=callback.message.chat.id,
+                        text=reservation_message_text,
+                        reply_markup=markup
+                    )
+                except Exception as e2:
+                    logging.error(f"Error in fallback message handling: {e2}")
 
     def callback_in_my_reservations(self, call):
         if call.data == 'cb_back':
@@ -340,22 +397,45 @@ class TelegramBot:
 
         markup = InlineKeyboardMarkup()
         markup.row_width = 1
-        if not reservation.payment_confiramtion_link:
-            markup.add(InlineKeyboardButton(PAY_NOW_BUTTON, callback_data=f'pay_{reservation_id}'),)
 
-        markup.add(
-            InlineKeyboardButton(CANCEL_RESERVATION_BUTTON, callback_data=f'delete_{reservation_id}'),
-            InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
-        )
-        
-        reservation_info = format_reservation_info(reservation)
-        bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)
+        if not reservation.payment_confirmation_link:
+            markup.add(InlineKeyboardButton(PAY_NOW_BUTTON, callback_data=f'pay_{reservation_id}'),
+                       InlineKeyboardButton(CANCEL_RESERVATION_BUTTON, callback_data=f'delete_{reservation_id}'),
+                       InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+                       )
+            reservation_info = format_reservation_info(reservation)
+            bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)
+        else:
+            markup.add(InlineKeyboardButton(CHANGE_PAYCHECK_BUTTON, callback_data=f'change-pay_{reservation_id}'),
+                       InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
+                       )
+            bot.delete_message(chat_id=chatId, message_id=messageId)
+            reservation_info = format_reservation_info(reservation)
+
+            try:
+                bot.send_photo(
+                    chat_id=chatId,
+                    photo=reservation.payment_confirmation_file_id,
+                    caption=reservation_info,
+                    reply_markup=markup
+                )
+            except Exception as e:  # AG TODO: Notify admin
+                # If there's an error sending the photo (e.g., expired link),
+                # fall back to text-only message
+                logging.error(f"Error sending payment confirmation photo: {e}")
+                bot.send_message(
+                    chat_id=chatId,
+                    text=f"{reservation_info}\n\n⚠️ Payment confirmation image unavailable",
+                    reply_markup=markup
+                )
+
+
 
     def callback_in_my_reservation(self, call):
         if call.data == 'cb_back':
             self.set_state(call.from_user.id, BotStates.state_my_reservation_list)
             self.show_my_reservations(call)
-        elif call.data.startswith('pay_'):
+        elif call.data.startswith('pay_') or call.data.startswith('change-pay_'):
             order_id = '_'.join(call.data.split('_')[1:])
             self.set_state(call.from_user.id, BotStates.state_pay)
             reservation_to_pay = self.reservations_db.get_reservation_by_order_id(order_id)
@@ -661,49 +741,59 @@ class TelegramBot:
             self.set_state(call.from_user.id, BotStates.state_reservation_menu_place)
             self.show_place(self.bot, call, new_reservation)
         elif call.data == 'pay_now':
-            self.set_state(call.from_user.id, BotStates.state_pay)
-            self.show_pay(self.bot, call, new_reservation)
+            new_reservation.payed = False
+            new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
+            new_reservation.payment_confirmation_link = ''
+            save_result_ok = self.reservations_db.create_reservation(new_reservation)
+            if save_result_ok:
+                self.set_state(call.from_user.id, BotStates.state_pay)
+                self.show_pay(self.bot, call, new_reservation)
+                self.notify_admin(messages.format_reservation_created_admin_notification(new_reservation))
+            else:
+                ...
+                # AG TODO: Error message + admin notification
         elif call.data == 'pay_later':
             new_reservation.payed = False
             new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
-            new_reservation.payment_confiramtion_link = ''
+            new_reservation.payment_confirmation_link = ''
             save_result_ok = self.reservations_db.create_reservation(new_reservation)
             if save_result_ok:
                 self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
                 self.set_state(call.from_user.id, BotStates.state_start)
                 self.bot.send_message(call.message.chat.id, messages.format_reservation_created(new_reservation), parse_mode=ParseMode.MARKDOWN)
-
                 self.notify_admin(messages.format_reservation_created_admin_notification(new_reservation))
+            else:
+                ...
+                # AG TODO: Error message + admin notification
         else:
             print('Unknown callback')
 
 
+    # Here set the reservation to link the confirmation with
     def show_pay(self, bot:TeleBot, callback, reservation: Reservation):
         markup = InlineKeyboardMarkup()
         markup.row_width = 1
-        markup.add(
-            InlineKeyboardButton(PAY_LINK_BUTTON, callback_data='pay_now', url=PAY_URL),
-            # InlineKeyboardButton(PAY_DONE_BUTTON, callback_data='pay_done'),
-            InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
-        )
 
-        recap_string = format_prepay(reservation.sum)
+        prev_state = self.get_previous_state(callback.from_user.id)
+        if prev_state == BotStates.state_reservation_menu_recap.name:
+            markup.add(InlineKeyboardButton(PAY_LINK_BUTTON, url=PAY_URL),)
+            recap_string = format_pay_from_recap(reservation.sum)
+        elif prev_state == BotStates.state_my_reservation.name:
+            self.bot.add_data(user_id=callback.from_user.id, pending_payment_reservation=reservation.order_id)
+            if not reservation.payment_confirmation_link:
+                markup.add(InlineKeyboardButton(PAY_LINK_BUTTON, url=PAY_URL),)
+                recap_string = format_pay_from_my_reservations(reservation.sum)
+            else:
+                recap_string = format_change_paycheck()
+
+            markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
 
         chatId = callback.message.chat.id
         messageId = callback.message.message_id
         bot.delete_message(chat_id=chatId, message_id=messageId)
-
-        # if len(recap_string) > 4095:
-        #     for x in range(0, len(recap_string), 4095):
-        #         # bot.reply_to(message, text=recap_string[x:x+4095])
-        #         bot.send_message(callback.message.chat.id, text=recap_string[x:x+4095], reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-        # else:
-        #     # bot.reply_to(message, text=recap_string)
-        #     bot.send_message(callback.message.chat.id, text=recap_string, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-
         bot.send_message(callback.message.chat.id, text=recap_string, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
 
-    def callback_in_pay(self, call): 
+    def callback_in_pay(self, call):
         global new_reservation
         if call.data == 'cb_back':
             prev_state = self.get_previous_state(call.from_user.id)
@@ -713,33 +803,5 @@ class TelegramBot:
             elif prev_state == BotStates.state_my_reservation.name:
                 self.set_state(call.from_user.id, BotStates.state_my_reservation_list)
                 self.show_my_reservations(call)
-        elif call.data == 'pay_done':
-            new_reservation.payed = False
-            new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
-            new_reservation.payment_confiramtion_link = ''
-            save_result_ok = self.reservations_db.create_reservation(new_reservation)
-            if save_result_ok:
-                self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
-                self.set_state(call.from_user.id, BotStates.state_start)
-
-                self.bot.send_message(call.message.chat.id, messages.format_payment_confirm_request(new_reservation), parse_mode=ParseMode.MARKDOWN)
-                self.notify_admin(messages.format_reservation_created_admin_notification(new_reservation))
         else:
             print('Unknown callback')
-
-
-    # def show_payment_confirm(self, bot:TeleBot, callback, new_reservation: Reservation):
-    #     markup = InlineKeyboardMarkup()
-    #     markup.row_width = 1
-    #     markup.add(
-    #         InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
-    #     )
-
-    #     chatId = callback.message.chat.id
-    #     messageId = callback.message.message_id
-    #     bot.delete_message(chat_id=chatId, message_id=messageId)
-
-    #     bot.send_message(callback.message.chat.id, text=messages.PATMENT_CONFIRM_REQUEST , reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-
-    # def callback_in_payment_confirm(self, call):
-    #     ...

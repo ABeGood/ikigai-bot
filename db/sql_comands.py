@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS reservations (
     time_to TIMESTAMP WITH TIME ZONE,
     sum FLOAT,
     payed BOOLEAN,
-    payment_confiramtion_link VARCHAR
+    payment_confirmation_link VARCHAR,
+    payment_confirmation_file_id VARCHAR
 );
 CREATE INDEX IF NOT EXISTS idx_order_id ON reservations(order_id);
 """

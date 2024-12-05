@@ -166,13 +166,16 @@ class Database:
 
     def get_unpaid_reservations_by_telegram_id(self, telegram_id: str):
         """Get all unpaid reservations without payment confirmation for a user"""
+        # current_datetime = datetime.now(LOCAL_TIMEZONE)
+        # current_date = current_datetime.date()
+        # AG TODO: get only future
         with self.get_db() as session:
             reservations = session.query(models.Reservation)\
                 .filter(
                     models.Reservation.telegram_id == telegram_id,
                     models.Reservation.payed == False,
-                    (models.Reservation.payment_confiramtion_link == None) | 
-                    (models.Reservation.payment_confiramtion_link == '')
+                    (models.Reservation.payment_confirmation_link == None) | 
+                    (models.Reservation.payment_confirmation_link == '')
                 )\
                 .order_by(models.Reservation.created_at.desc())\
                 .all()
@@ -413,7 +416,7 @@ class Database:
                     period=float(reservation_data['period']),  # Ensure period is float
                     sum=reservation_data['sum'],
                     payed=reservation_data.get('payed', False),
-                    payment_confiramtion_link=reservation_data.get('payment_confiramtion_link')
+                    payment_confirmation_link=reservation_data.get('payment_confirmation_link')
                 )
                 
                 # Validate time slots are available
@@ -531,16 +534,17 @@ class Database:
             logger.error(f"Error updating reservation {order_id}: {str(e)}")
             return False
 
-    def update_payment_confirmation(self, reservation_id: str, payment_confirmation_link: str):
+    def update_payment_confirmation(self, reservation_id: str, payment_confirmation_link: str, payment_confirmation_file_id: str):
         """Update payment confirmation link for a reservation"""
         with self.get_db() as session:
             reservation = session.query(models.Reservation)\
                 .filter(models.Reservation.order_id == reservation_id)\
                 .first()
             if reservation:
-                reservation.payment_confiramtion_link = payment_confirmation_link
+                reservation.payment_confirmation_link = payment_confirmation_link
+                reservation.payment_confirmation_file_id = payment_confirmation_file_id
                 session.commit()
-                return True
+                return reservation
             return False
         
     def _validate_reservation_update(self, session: Session, reservation: models.Reservation) -> bool:
@@ -812,7 +816,7 @@ class Database:
                     return pd.DataFrame(columns=[
                         'id', 'created_at', 'order_id', 'telegram_id', 'name',
                         'type', 'place', 'day', 'time_from', 'time_to', 'period',
-                        'sum', 'payed', 'payment_confiramtion_link'
+                        'sum', 'payed', 'payment_confirmation_link'
                     ])
                 
                 data = []
@@ -831,7 +835,7 @@ class Database:
                         'period': r.period,
                         'sum': r.sum,
                         'payed': r.payed,
-                        'payment_confiramtion_link': r.payment_confiramtion_link
+                        'payment_confirmation_link': r.payment_confirmation_link
                     })
                 
                 return pd.DataFrame(data)
@@ -841,7 +845,7 @@ class Database:
             return pd.DataFrame(columns=[
                 'id', 'created_at', 'order_id', 'telegram_id', 'name',
                 'type', 'place', 'day', 'time_from', 'time_to', 'period',
-                'sum', 'payed', 'payment_confiramtion_link'
+                'sum', 'payed', 'payment_confirmation_link'
             ])
 
 class DatabaseError(Exception):
