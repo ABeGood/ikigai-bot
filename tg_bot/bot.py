@@ -1,5 +1,4 @@
 import logging
-from dotenv import load_dotenv
 import pandas as pd
 import telebot # telebot
 from datetime import datetime as dt, timedelta
@@ -26,8 +25,6 @@ from tg_bot.messages import *
 from db.connection import Database
 from tg_bot import config
 import math
-
-load_dotenv()
 
 
 logging.basicConfig(
