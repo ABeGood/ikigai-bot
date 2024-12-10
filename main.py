@@ -9,12 +9,12 @@ if __name__ == '__main__':
 
     load_dotenv()
 
+    # app.run(debug=True, port=5000)
+
     reservations_db = Database()
     tg_bot = TelegramBot(bot_token=os.environ.get('BOT_TOKEN'), reservations_db=reservations_db)
 
-    tg_bot.bot.infinity_polling(skip_pending=True)
+    tg_bot.run_bot()
 
     # AG TODO: pending_payment_reservation must be deleted from bot's state data on polling timeout
-
-    # app.run(debug=True, port=5000)
 

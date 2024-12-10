@@ -13,7 +13,7 @@ class Reservation():
     time_to : datetime
     sum : float
     payed : bool
-    payment_confirmation_link : str
+    payment_confirmation_link : str | None
     payment_confirmation_file_id : str
     available_places : list[int]
 

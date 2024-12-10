@@ -164,23 +164,65 @@ class Database:
             logger.error(f"Error getting upcoming reservations: {str(e)}")
             return []
 
+
     def get_unpaid_reservations_by_telegram_id(self, telegram_id: str):
-        """Get all unpaid reservations without payment confirmation for a user"""
-        # current_datetime = datetime.now(LOCAL_TIMEZONE)
-        # current_date = current_datetime.date()
-        # AG TODO: get only future
+        """Get all future unpaid reservations without payment confirmation for a user"""
+        current_datetime = datetime.now(LOCAL_TIMEZONE)
+        current_date = current_datetime.date()
+        
         with self.get_db() as session:
             reservations = session.query(models.Reservation)\
                 .filter(
                     models.Reservation.telegram_id == telegram_id,
-                    models.Reservation.payed == False,
                     (models.Reservation.payment_confirmation_link == None) | 
-                    (models.Reservation.payment_confirmation_link == '')
+                    (models.Reservation.payment_confirmation_link == ''),
+                    or_(
+                        # Future dates
+                        models.Reservation.day > current_date,
+                        # Today but future time
+                        and_(
+                            models.Reservation.day == current_date,
+                            models.Reservation.time_from > current_datetime
+                        )
+                    )
                 )\
                 .order_by(models.Reservation.created_at.desc())\
                 .all()
             return reservations if reservations else []
+    
+    def get_paid_unconfirmed_reservations(self):
+        """
+        Get all future reservations that have payment confirmation but are not marked as paid.
         
+        Returns:
+            list: List of Reservation objects that are:
+                - Have payment confirmation link
+                - Not marked as paid (payed == False)
+                - Haven't started yet (future reservations)
+        """
+        current_datetime = datetime.now(LOCAL_TIMEZONE)
+        current_date = current_datetime.date()
+        
+        with self.get_db() as session:
+            reservations = session.query(models.Reservation)\
+                .filter(
+                    models.Reservation.payed == False,
+                    models.Reservation.payment_confirmation_link.isnot(None),
+                    models.Reservation.payment_confirmation_link != '',
+                    or_(
+                        # Future dates
+                        models.Reservation.day > current_date,
+                        # Today but future time
+                        and_(
+                            models.Reservation.day == current_date,
+                            models.Reservation.time_from > current_datetime
+                        )
+                    )
+                )\
+                .order_by(models.Reservation.created_at.desc())\
+                .all()
+            return reservations if reservations else []
+    
     def get_reservations_for_date(self, target_date: date) -> List[models.Reservation]:
         """
         Get all reservations for a specific date.
@@ -312,6 +354,53 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting available timeslots: {str(e)}")
             return {}
+
+    def get_upcoming_reservations_without_payment(self) -> List[models.Reservation]:
+        """
+        Get all upcoming reservations that don't have a payment confirmation link.
+        Only returns reservations that have not yet occurred and need payment confirmation.
+        
+        Returns:
+            List[models.Reservation]: List of upcoming Reservation model instances without payment confirmation
+        """
+        try:
+            with self.get_db() as session:
+                # Get current datetime in UTC
+                current_datetime = datetime.now(LOCAL_TIMEZONE)
+                current_date = current_datetime.date()
+                
+                # Query unpaid reservations that are either:
+                # 1. In the future
+                # 2. Today but haven't started yet
+                upcoming_unpaid = session.query(models.Reservation).filter(
+                    and_(
+                         or_(
+                            models.Reservation.payment_confirmation_link.is_(None),
+                            models.Reservation.payment_confirmation_link == ''
+                        ),
+                        or_(
+                            # Future dates
+                            models.Reservation.day > current_date,
+                            # Today but future time
+                            and_(
+                                models.Reservation.day == current_date,
+                                models.Reservation.time_from > current_datetime
+                            )
+                        )
+                    )
+                ).order_by(
+                    models.Reservation.created_at.desc()
+                ).all()
+                
+                return upcoming_unpaid
+                    
+        except SQLAlchemyError as e:
+            logger.error(f"Database error getting reservations without payment: {str(e)}")
+            return []
+        except Exception as e:
+            logger.error(f"Error getting reservations without payment: {str(e)}")
+            return []
+        
 
     # def get_available_places_for_timeslot(self, new_reservation: 'Reservation', time_from: time, time_to: time) -> List[int] | None:
     #     """

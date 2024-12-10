@@ -24,6 +24,7 @@ import ast
 from tg_bot.messages import *
 from db.connection import Database
 from tg_bot import config
+from tg_bot.reminder import ReminderSystem
 import math
 
 
@@ -38,15 +39,34 @@ class TelegramBot:
     state_storage : StateMemoryStorage
     reservations_db : Database
     bot : telebot.TeleBot
+    reminder_system : ReminderSystem
 
     def __init__(self, bot_token:str, reservations_db:Database) -> None:
         self.state_storage = StateMemoryStorage()
         self.reservations_db = reservations_db
         self.bot = telebot.TeleBot(token=bot_token, state_storage=self.state_storage)
 
+        self.reminder_system = ReminderSystem(self)
+        self.logger = logging.getLogger(__name__)
+
         self.bot.add_custom_filter(custom_filters.StateFilter(self.bot))
         self.register_handlers()
         self.register_callback_handlers()
+
+
+    def run_bot(self):
+        """Start both the bot and reminder system"""
+        # Start reminder system
+        self.reminder_system.start()
+        
+        # Start bot polling
+        try:
+            self.logger.info("Starting bot...")
+            self.bot.polling(non_stop=True)
+        finally:
+            # Ensure reminder system is stopped if bot exits
+            self.reminder_system.stop()
+
 
     def set_state(self, user_id: int, new_state: State, store_prev_state: bool = True):
         current_state = self.bot.get_state(user_id)
@@ -114,7 +134,6 @@ class TelegramBot:
         )
         def handle_payment_photo(message):
             # AG TODO: Set to start state
-            # AG TODO: Replace old screenshot by new
             photo = message.photo[-1]
             file_id = photo.file_id
             file_info = self.bot.get_file(file_id)
@@ -132,8 +151,13 @@ class TelegramBot:
                 self.bot.reply_to(message, text=messages.format_payment_confirm_receive(payed_reservation))
 
                 # Notify admin
-                admin_notification = messages.format_payment_confirm_receive_admin_notofication(payed_reservation)
-                self.notify_admin(admin_notification)
+                self.bot.send_photo(
+                    chat_id=config.admin_chat_id,
+                    photo=file_id,
+                    caption=messages.format_payment_confirm_receive_admin_notification(payed_reservation),
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+
                 return
 
             last_reservation = self.reservations_db.get_last_reservation_by_telegram_id(str(message.from_user.id))
@@ -148,7 +172,7 @@ class TelegramBot:
                 self.bot.reply_to(message, text=messages.format_payment_confirm_receive(payed_reservation))
 
                 # Notify admin
-                admin_notification = messages.format_payment_confirm_receive_admin_notofication(payed_reservation)
+                admin_notification = messages.format_payment_confirm_receive_admin_notification(payed_reservation)
                 self.notify_admin(admin_notification)
 
             else:
@@ -166,7 +190,7 @@ class TelegramBot:
                     
                     self.bot.reply_to(message, messages.format_payment_confirm_receive(reservation))
                     
-                    admin_notification = messages.format_payment_confirm_receive_admin_notofication(reservation)
+                    admin_notification = messages.format_payment_confirm_receive_admin_notification(reservation)
                     self.notify_admin(admin_notification)
                 
                 else:
@@ -672,7 +696,7 @@ class TelegramBot:
     def callback_in_reservation_menu_time(self, call):
         global new_reservation
         if call.data == 'cb_back':
-            new_reservation.day = ''  # TODO
+            new_reservation.day = ''
             self.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
             self.show_date(self.bot, call, new_reservation)
         else:
@@ -740,7 +764,7 @@ class TelegramBot:
         elif call.data == 'pay_now':
             new_reservation.payed = False
             new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
-            new_reservation.payment_confirmation_link = ''
+            new_reservation.payment_confirmation_link = None
             save_result_ok = self.reservations_db.create_reservation(new_reservation)
             if save_result_ok:
                 self.set_state(call.from_user.id, BotStates.state_pay)
@@ -752,7 +776,7 @@ class TelegramBot:
         elif call.data == 'pay_later':
             new_reservation.payed = False
             new_reservation.order_id = self.reservations_db.generate_order_id(new_reservation)
-            new_reservation.payment_confirmation_link = ''
+            new_reservation.payment_confirmation_link = None
             save_result_ok = self.reservations_db.create_reservation(new_reservation)
             if save_result_ok:
                 self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)

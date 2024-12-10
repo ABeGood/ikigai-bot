@@ -179,13 +179,32 @@ def format_payment_confirm_receive(reservation: Reservation):   # TODO
 Мы проверим платеж и подтвердим вашу бронь.
 '''
 
-def format_payment_confirm_receive_admin_notofication(reservation: Reservation):   # TODO: 1. Add payment photo, 2. Confirm from tg
-    return escape_markdown(f'''
+def format_payment_confirm_receive_admin_notification(reservation: Reservation):   # TODO: 1. Add payment photo, 2. Confirm from tg
+    escaped_name = escape_markdown(reservation.name)
+    user_link = f'[{escaped_name}](tg://user?id\\={reservation.telegram_id})'
+
+    return f'''
 💳 Payment confirmation received:
-Client: {reservation.name} ({reservation.telegram_id})
-Day: {reservation.day.strftime('%d.%m.%Y')}
-Time: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')} ({reservation.period} hours)
-''')
+Client: {user_link}
+Day: {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
+Time: {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')} \\({escape_markdown(str(reservation.period))} hours\\)
+'''
+
+def format_wait_to_confirm_admin_notification(reservation: Reservation) -> str | None:
+    """Format notification message for admin about unconfirmed payments"""
+    if not reservation:
+        return None
+    
+    escaped_name = escape_markdown(reservation.name)
+    user_link = f'[{escaped_name}]\\(tg://user?id\\={reservation.telegram_id}\\)'
+        
+    return f'''🔔 Payments awaiting confirmation:
+
+Client: {user_link}
+Date: {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
+Time: {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')}
+Sum: {escape_markdown(str(reservation.sum))} CZK
+'''
 
 def format_no_pending_payments():
     return f'''❌ У вас нет бронирований, ожидающих подтверждения оплаты.
