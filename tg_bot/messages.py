@@ -152,25 +152,25 @@ Order ID: `{escape_markdown(reservation.order_id)}`
 '''
 
 def format_reservation_created_and_payed(reservation: Reservation):
-    return f'''🎉 *Ваша резервация подтверждена и оплачена!*
-*Дата:* {reservation.day.strftime('%d.%m.%Y')}
-*Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
+    return f'''🎉 *Ваша резервация подтверждена и оплачена\\!*
+*Дата:* {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
+*Время:* {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}
 
-До встречи!
+До встречи\\!
 '''
 
 def format_payment_confirm_request(reservation: Reservation):
     return f'''🎉 *Ваша резервация подтверждена!*
 *Дата:* {reservation.day.strftime('%d.%m.%Y')}
-*Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
+*Время:* {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}
 
 Пожалуйста, пришлите нам подтверждение об оплате. 
 Это может быть скриншот с суммой и адресом перевода.
 Его можно скинуть как фотку прямо сюда или позже через меню *"Мои резервации"*
 
-До встречи!
+До встречи\\!
 '''
 
 def format_payment_confirm_receive(reservation: Reservation):   # TODO
@@ -196,7 +196,7 @@ def format_wait_to_confirm_admin_notification(reservation: Reservation) -> str |
         return None
     
     escaped_name = escape_markdown(reservation.name)
-    user_link = f'[{escaped_name}]\\(tg://user?id\\={reservation.telegram_id}\\)'
+    user_link = f'[{escaped_name}](tg://user?id\\={reservation.telegram_id})'
         
     return f'''🔔 Payments awaiting confirmation:
 
@@ -227,8 +227,6 @@ def get_status_string(reservation: Reservation):
     return status
 
 def format_reservation_info(reservation: Reservation):
-    
-        
     return f"""
 {get_status_string(reservation)}
 День: {reservation.day.strftime('%d.%m.%Y')}
@@ -236,6 +234,7 @@ def format_reservation_info(reservation: Reservation):
 Место: {reservation.place}
 Сумма: {reservation.sum}
 """
+
 
 def localize_from_db(dt):
     """Convert UTC datetime from DB to local timezone"""

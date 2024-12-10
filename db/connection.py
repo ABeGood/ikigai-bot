@@ -614,7 +614,7 @@ class Database:
                     return False
                 
                 session.commit()
-                return True
+                return reservation
                 
         except SQLAlchemyError as e:
             logger.error(f"Database error updating reservation {order_id}: {str(e)}")

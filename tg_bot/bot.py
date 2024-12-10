@@ -5,6 +5,7 @@ from datetime import datetime as dt, timedelta
 import json
 from time import sleep
 import time
+import re
 from typing import Optional
 
 from telebot import custom_filters, TeleBot
@@ -26,6 +27,16 @@ from db.connection import Database
 from tg_bot import config
 from tg_bot.reminder import ReminderSystem
 import math
+
+def get_admin_payment_keyboard(reservation_id: str) -> InlineKeyboardMarkup:
+    """Create keyboard for admin payment confirmation"""
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    markup.add(
+        InlineKeyboardButton("✅ Подтвердить", callback_data=f'confirm_payment_{reservation_id}'),
+        InlineKeyboardButton("❌ Отклонить", callback_data=f'reject_payment_{reservation_id}')
+    )
+    return markup
 
 
 logging.basicConfig(
@@ -52,6 +63,7 @@ class TelegramBot:
         self.bot.add_custom_filter(custom_filters.StateFilter(self.bot))
         self.register_handlers()
         self.register_callback_handlers()
+        self.register_admin_payment_handlers()
 
 
     def run_bot(self):
@@ -85,8 +97,84 @@ class TelegramBot:
         state_data = self.bot.retrieve_data(user_id)
         return state_data.data.get('prev_state') if state_data else None
 
-    def notify_admin(self, text:str):
-        self.bot.send_message(chat_id=config.admin_chat_id, text=text, parse_mode=ParseMode.MARKDOWN_V2)
+    def notify_admin(self, text:str, reservation:Reservation|None = None):
+        if not reservation:
+            self.bot.send_message(chat_id=config.admin_chat_id, text=text, parse_mode=ParseMode.MARKDOWN_V2)
+        else:
+            keyboard = get_admin_payment_keyboard(reservation.order_id)
+            self.bot.send_photo(
+                chat_id=config.admin_chat_id,
+                photo=reservation.payment_confirmation_file_id,
+                caption=messages.format_payment_confirm_receive_admin_notification(reservation),
+                parse_mode=ParseMode.MARKDOWN_V2,
+                reply_markup=keyboard
+            )
+
+
+
+    def register_admin_payment_handlers(self):
+        @self.bot.callback_query_handler(func=lambda call: call.data.startswith(('confirm_payment_', 'reject_payment_')))
+        def handle_admin_payment_action(call):
+            # Verify it's coming from admin chat
+            if call.message.chat.id != config.admin_chat_id:
+                return
+            
+            action = None
+            reservation_id = None
+
+            if str(call.data).startswith('confirm_payment_'):
+                action = 'confirm'
+                reservation_id = re.sub('^confirm_payment_', '', call.data)
+            elif str(call.data).startswith('reject_payment_'):
+                action = 'reject'
+                reservation_id = re.sub('^reject_payment_', '', call.data)
+                
+            reservation = self.reservations_db.get_reservation_by_order_id(reservation_id)
+            
+            if not reservation:
+                self.bot.answer_callback_query(call.id, text="Reservation not found")
+                return
+                
+            if action == 'confirm':
+                # Update reservation status
+                reservation = self.reservations_db.update_reservation(reservation_id, {'payed': True})
+                
+                # Notify admin
+                self.bot.edit_message_caption(
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    caption=f"{messages.format_reservation_created_and_payed(reservation=reservation)}\n✅ Payment confirmed",
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+                
+                # Notify user
+                self.bot.send_message(
+                    chat_id=reservation.telegram_id,
+                    text=messages.format_reservation_created_and_payed(reservation),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                
+            elif action == 'reject':
+                reservation = self.reservations_db.update_reservation(reservation_id, {'payment_confirmation_link': None, 'payment_confirmation_file_id': None})
+                # Keep reservation unpaid
+                # Notify admin
+                self.bot.edit_message_caption(
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    caption=f"{messages.format_reservation_created_and_payed(reservation=reservation)}\n❌ Payment rejected",
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+                
+                # Notify user about rejection
+                self.bot.send_message(
+                    chat_id=reservation.telegram_id,
+                    text=(
+                        "❌ Ваше подтверждение оплаты было отклонено\\.\n\n"
+                        "Пожалуйста, убедитесь, что сумма и получатель платежа верны, "
+                        "и отправьте новое подтверждение\\."
+                    ),  # AG: TODO reservation info
+                    parse_mode=ParseMode.MARKDOWN
+                )
 
     
     def register_handlers(self):
@@ -144,57 +232,60 @@ class TelegramBot:
 
             state_data = self.bot.retrieve_data(message.from_user.id)
             reservation_to_pay = state_data.data.get('pending_payment_reservation', None) if state_data.data else None
+    
             if reservation_to_pay:
                 payed_reservation = self.reservations_db.update_payment_confirmation(reservation_to_pay, file_url, file_id)
-                
-                # Notify user
                 self.bot.reply_to(message, text=messages.format_payment_confirm_receive(payed_reservation))
-
-                # Notify admin
+                
+                # Add keyboard to admin notification
+                keyboard = get_admin_payment_keyboard(payed_reservation.order_id)
                 self.bot.send_photo(
                     chat_id=config.admin_chat_id,
                     photo=file_id,
                     caption=messages.format_payment_confirm_receive_admin_notification(payed_reservation),
-                    parse_mode=ParseMode.MARKDOWN_V2
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    reply_markup=keyboard
                 )
-
                 return
 
             last_reservation = self.reservations_db.get_last_reservation_by_telegram_id(str(message.from_user.id))
 
             if last_reservation and not last_reservation.payment_confirmation_link and not last_reservation.payed:
-                # Case 1: Last reservation exists and needs payment confirmation
-
-                # Add payment confirmation to the last reservation
                 payed_reservation = self.reservations_db.update_payment_confirmation(str(last_reservation.order_id), file_url, file_id)
-                
-                # Notify user
                 self.bot.reply_to(message, text=messages.format_payment_confirm_receive(payed_reservation))
-
-                # Notify admin
-                admin_notification = messages.format_payment_confirm_receive_admin_notification(payed_reservation)
-                self.notify_admin(admin_notification)
+                
+                # Add keyboard to admin notification
+                keyboard = get_admin_payment_keyboard(payed_reservation.order_id)
+                self.bot.send_photo(
+                    chat_id=config.admin_chat_id,
+                    photo=file_id,
+                    caption=messages.format_payment_confirm_receive_admin_notification(payed_reservation),
+                    parse_mode=ParseMode.MARKDOWN_V2,
+                    reply_markup=keyboard
+                )
 
             else:
-                # Get all unpaid reservations without confirmation
                 unpaid_reservations = self.reservations_db.get_unpaid_reservations_by_telegram_id(str(message.from_user.id))
                 
                 if len(unpaid_reservations) == 0:
-                    # No reservations need payment confirmation
                     self.bot.reply_to(message, text=messages.format_no_pending_payments())
                 
                 elif len(unpaid_reservations) == 1:
-                    # Only one reservation needs confirmation
                     reservation = unpaid_reservations[0]
                     self.reservations_db.update_payment_confirmation(str(reservation.order_id), file_url, file_id)
-                    
                     self.bot.reply_to(message, messages.format_payment_confirm_receive(reservation))
                     
-                    admin_notification = messages.format_payment_confirm_receive_admin_notification(reservation)
-                    self.notify_admin(admin_notification)
+                    # Add keyboard to admin notification
+                    keyboard = get_admin_payment_keyboard(reservation.order_id)
+                    self.bot.send_photo(
+                        chat_id=config.admin_chat_id,
+                        photo=file_id,
+                        caption=messages.format_payment_confirm_receive_admin_notification(reservation),
+                        parse_mode=ParseMode.MARKDOWN_V2,
+                        reply_markup=keyboard
+                    )
                 
                 else:
-                    # Multiple reservations need confirmation
                     self.bot.reply_to(message, text=messages.format_multiple_pending_payments())
 
     def register_callback_handlers(self):
@@ -470,7 +561,7 @@ class TelegramBot:
             self.show_my_reservations(call)
 
             admin_notification = messages.format_reservation_deleted_admin_notification(deleted_reservation)
-            self.notify_admin(admin_notification)
+            self.notify_admin(text=admin_notification)
 
 
     def show_reservation_type(self, bot:TeleBot, callback):
@@ -769,7 +860,7 @@ class TelegramBot:
             if save_result_ok:
                 self.set_state(call.from_user.id, BotStates.state_pay)
                 self.show_pay(self.bot, call, new_reservation)
-                self.notify_admin(messages.format_reservation_created_admin_notification(new_reservation))
+                self.notify_admin(text=messages.format_reservation_created_admin_notification(new_reservation))
             else:
                 ...
                 # AG TODO: Error message + admin notification
@@ -782,7 +873,7 @@ class TelegramBot:
                 self.bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.id)
                 self.set_state(call.from_user.id, BotStates.state_start)
                 self.bot.send_message(call.message.chat.id, messages.format_reservation_created(new_reservation), parse_mode=ParseMode.MARKDOWN)
-                self.notify_admin(messages.format_reservation_created_admin_notification(new_reservation))
+                self.notify_admin(text=messages.format_reservation_created_admin_notification(new_reservation))
             else:
                 ...
                 # AG TODO: Error message + admin notification

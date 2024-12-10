@@ -10,7 +10,6 @@ from telebot.types import Message
 from telegram.constants import ParseMode
 from tg_bot import config
 from db.connection import Database
-from tg_bot import messages
 
 
 class ReminderSystem:
@@ -25,8 +24,8 @@ class ReminderSystem:
         """
         self.telegram_bot = telegram_bot
         self.db : Database = telegram_bot.reservations_db
-        self.bot = telegram_bot.bot  # The telebot instance
         self.logger = logging.getLogger(__name__)
+        self.bot = telegram_bot
         
         # Get thresholds from config
         self.reminder_thresholds = config.reminder_thresholds
@@ -76,11 +75,7 @@ class ReminderSystem:
         """Send payment reminder to user"""
         try:
             message = self.get_reminder_message(reservation, reminder_level)
-            self.bot.send_message(
-                chat_id=reservation.telegram_id,
-                text=message,
-                parse_mode='MARKDOWN'
-            )
+            self.bot.notify_admin(text=message)
             return True
         except Exception as e:
             self.logger.error(f"Failed to send reminder for reservation {reservation.order_id}: {e}")
@@ -90,17 +85,14 @@ class ReminderSystem:
         """Delete unpaid reservation and notify user"""
         try:
             self.db.delete_reservation(reservation.order_id)
-            self.bot.send_message(
-                chat_id=reservation.telegram_id,
-                text=(
-                    "❌ *Ваша резервация была отменена*\n\n"
-                    f"Дата: {reservation.day.strftime('%d.%m.%Y')}\n"
-                    f"Время: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}\n"
-                    f"Место: {reservation.place}\n\n"
-                    "Причина: отсутствие оплаты в течение 24 часов."
-                ),
-                parse_mode='MARKDOWN'
+            text=(
+                "❌ *Ваша резервация была отменена*\n\n"
+                f"Дата: {reservation.day.strftime('%d.%m.%Y')}\n"
+                f"Время: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}\n"
+                f"Место: {reservation.place}\n\n"
+                "Причина: отсутствие оплаты в течение 24 часов."
             )
+            self.bot.notify_admin(text=text)
             return True
         except Exception as e:
             self.logger.error(f"Failed to delete reservation {reservation.order_id}: {e}")
@@ -143,12 +135,7 @@ class ReminderSystem:
             
         for reservation in unconfirmed:
             try:
-                self.bot.send_photo(
-                    chat_id=config.admin_chat_id,
-                    photo=reservation.payment_confirmation_file_id,
-                    caption=messages.format_wait_to_confirm_admin_notification(reservation),
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
+                self.bot.notify_admin(text = '', reservation=reservation)
                 self.last_admin_notification = current_time
             except Exception as e:
                 self.logger.error(f"Failed to send admin notification: {e}")
