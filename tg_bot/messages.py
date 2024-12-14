@@ -2,6 +2,7 @@ from classes.classes import Reservation
 import datetime
 from datetime import date, time
 import pytz
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 # Message texts
@@ -173,6 +174,24 @@ def format_payment_confirm_request(reservation: Reservation):
 До встречи\\!
 '''
 
+
+def format_user_reminder(reservation: Reservation):
+    return f"""⚠️ *Напоминание об оплате*\n\n
+*Дата:* {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}\n
+*Время:* {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')}\n
+*Место:* {reservation.place}\n
+*Сумма:* {escape_markdown(str(reservation.sum))} CZK\n\n"""
+
+
+def format_reservation_deleted(reservation: Reservation):
+
+    return f"""❌ *Ваша резервация была отменена*\n\n"
+f"Дата: {reservation.day.strftime('%d.%m.%Y')}\n"
+f"Время: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}\n"
+f"Место: {reservation.place}\n\n"
+"Причина: отсутствие оплаты в течение 24 часов."""
+
+
 def format_payment_confirm_receive(reservation: Reservation):   # TODO
     return f'''✅ Спасибо! 
 Подтверждение оплаты получено для бронирования {reservation.order_id}.
@@ -234,6 +253,25 @@ def format_reservation_info(reservation: Reservation):
 Место: {reservation.place}
 Сумма: {reservation.sum}
 """
+
+def get_admin_payment_keyboard(reservation_id: str) -> InlineKeyboardMarkup:
+    """Create keyboard for admin payment confirmation"""
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    markup.add(
+        InlineKeyboardButton("✅ Подтвердить", callback_data=f'confirm_payment_{reservation_id}'),
+        InlineKeyboardButton("❌ Отклонить", callback_data=f'reject_payment_{reservation_id}')
+    )
+    return markup
+
+
+def get_user_reminder_keyboard(reservation_id: str) -> InlineKeyboardMarkup:
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(
+        "Перейти к резервации",
+        callback_data=f"view_reservation_{reservation_id}"
+    ))
+    return markup
 
 
 def localize_from_db(dt):

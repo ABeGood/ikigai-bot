@@ -355,7 +355,7 @@ class Database:
             logger.error(f"Error getting available timeslots: {str(e)}")
             return {}
 
-    def get_upcoming_reservations_without_payment(self) -> List[models.Reservation]:
+    def get_upcoming_unpaid_reservations(self) -> List[models.Reservation]:
         """
         Get all upcoming reservations that don't have a payment confirmation link.
         Only returns reservations that have not yet occurred and need payment confirmation.
@@ -391,9 +391,8 @@ class Database:
                 ).order_by(
                     models.Reservation.created_at.desc()
                 ).all()
-                
+
                 return upcoming_unpaid
-                    
         except SQLAlchemyError as e:
             logger.error(f"Database error getting reservations without payment: {str(e)}")
             return []
@@ -585,8 +584,10 @@ class Database:
                 
                 # List of allowed fields to update
                 allowed_fields = {
-                    'name', 'type', 'place', 'day',
-                    'time_from', 'time_to', 'period', 'payed'
+                    # 'name', 'type', 'place', 'day',
+                    'time_from', 'time_to', 'period', 'payed',
+                    'payment_confirmation_link',
+                    'payment_confirmation_file_id'
                 }
                 
                 # Update only allowed fields
@@ -623,7 +624,7 @@ class Database:
             logger.error(f"Error updating reservation {order_id}: {str(e)}")
             return False
 
-    def update_payment_confirmation(self, reservation_id: str, payment_confirmation_link: str, payment_confirmation_file_id: str):
+    def update_payment_confirmation(self, reservation_id: str, payment_confirmation_link: str, payment_confirmation_file_id: str) -> models.Reservation|None:
         """Update payment confirmation link for a reservation"""
         with self.get_db() as session:
             reservation = session.query(models.Reservation)\
@@ -634,8 +635,8 @@ class Database:
                 reservation.payment_confirmation_file_id = payment_confirmation_file_id
                 session.commit()
                 return reservation
-            return False
-        
+            return None
+
     def _validate_reservation_update(self, session: Session, reservation: models.Reservation) -> bool:
         """
         Validate that the updated reservation doesn't conflict with existing ones.
