@@ -34,11 +34,11 @@ workday_end = datetime.time(21, 0)
 places : Dict[str, Tuple[int, ...]] = {'h': (1, 2), 'b': (3,)}
 
 prices_hair = { 1: 150.0,
-                2: 360.0,
+                3: 360.0,
                 12: 600.0}
 
 prices_brows = {1: 130.0,
-                2: 300.0,
+                3: 300.0,
                 12: 500.0}
 
 prices = {'h':prices_hair, 'b':prices_brows}
