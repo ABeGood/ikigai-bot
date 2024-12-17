@@ -7,27 +7,41 @@ from datetime import timedelta
 admin_chat_id = -1002217216611
 LOCAL_TIMEZONE = pytz.timezone('Europe/Prague')
 
-# TODO: reset after tests
-reminder_thresholds = [
-    timedelta(minutes=15),
-    timedelta(minutes=7),
-    timedelta(minutes=5),
-    timedelta(minutes=3),
+reminder_thresholds_from_creation = [
+    timedelta(minutes=60*24),
+    timedelta(minutes=60*20),
+    timedelta(minutes=60*6),
+    timedelta(minutes=60*1),
 ]
+
+reminder_thresholds_from_start = [
+    timedelta(minutes=10),   # Delete threshold - delete reservation 5 mins before start
+    timedelta(minutes=60*2),  # First warning 120 mins before start
+    timedelta(minutes=20)   # Second warning 20 mins before start
+]
+
+admin_reminder_cooldown = timedelta(minutes=30)
 
 stride_mins = 30
 time_step = 30  # min
-time_buffer_mins = 25
-
-closest_slot_start_min_buffer = 5
+time_buffer_mins = 15
 
 days_lookforward = 180
 
 workday_start = datetime.time(9, 0) 
 workday_end = datetime.time(21, 0)
 
-places : Dict[str, Tuple[int, ...]] = {'b': (1, 2, 3), 'h': (1, 2)}
-prices = {'h': 250, 'b': 250}
+places : Dict[str, Tuple[int, ...]] = {'h': (1, 2), 'b': (3,)}
+
+prices_hair = { 1: 150.0,
+                2: 360.0,
+                12: 600.0}
+
+prices_brows = {1: 130.0,
+                2: 300.0,
+                12: 500.0}
+
+prices = {'h':prices_hair, 'b':prices_brows}
 
 period_buttons = {
     'hour_1': (1, '🕐 1 час'),

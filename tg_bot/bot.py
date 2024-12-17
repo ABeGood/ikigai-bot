@@ -100,7 +100,6 @@ class TelegramBot:
             )
 
 
-
     def register_admin_payment_handlers(self):
         @self.bot.callback_query_handler(func=lambda call: call.data.startswith(('confirm_payment_', 'reject_payment_')))
         def handle_admin_payment_action(call):
@@ -384,10 +383,11 @@ class TelegramBot:
         self.set_state(user_id=message.from_user.id, new_state=BotStates.state_main_menu)
         self.show_main_menu(self.bot, message)
 
+
     def admin(self, message):
         chat_id = message.chat.id
         self.bot.send_message(chat_id=chat_id, text='Hello')
-    
+
 
     def show_my_reservations(self, callback):
         """
@@ -412,7 +412,7 @@ class TelegramBot:
                     time_from_str = r.time_from.strftime("%H:%M")
                     time_to_str = r.time_to.strftime("%H:%M")
                     
-                    button_text = f'{messages.get_status_string(r)} {day_str}  c {time_from_str} до {time_to_str}'
+                    button_text = f'{messages.get_status_string(r)} {day_str} {time_from_str} - {time_to_str}'
                     markup.add(InlineKeyboardButton(
                         text=button_text,
                         callback_data=r.order_id
@@ -636,7 +636,7 @@ class TelegramBot:
         else:
             hours = int(call.data)
             new_reservation.period = hours
-            new_reservation.sum = config.prices[new_reservation.type] * new_reservation.period  # AG TODO: Move to Reservation class
+            new_reservation.sum = config.prices[new_reservation.type][hours]  # AG TODO: Move to Reservation class
             self.set_state(call.from_user.id, BotStates.state_reservation_menu_date)
             self.show_date(self.bot, call, new_reservation)
 
@@ -665,14 +665,7 @@ class TelegramBot:
         calendar = InlineKeyboardMarkup(InlineKeyboardMarkup.de_json(json_calendar).keyboard)
         calendar.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
 
-        # Filter the reservations_table by 'Type' first
-        reservation_df = self.reservations_db.to_dataframe()
-        filtered_by_type = reservation_df[reservation_df['type'] == new_reservation.type]
-
         available_days = self.reservations_db.find_available_days(new_reservation)
-
-        # available_days = utils.find_reservation_gaps()
-
 
         date_format = '%Y_%m_%d'
 

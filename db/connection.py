@@ -15,7 +15,7 @@ from functools import lru_cache
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from db import models
-from tg_bot.config import places, workday_start, workday_end, LOCAL_TIMEZONE
+from tg_bot.config import places, workday_start, workday_end, days_lookforward, LOCAL_TIMEZONE
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -261,6 +261,7 @@ class Database:
         Returns:
             Dictionary with time slots as keys (format "HH:MM") and lists of available places as values
         """
+        # Here I use UTC to keep it compatible with DB.  <-- TODO
         try:
             if not new_reservation.day:
                 logger.error("No day specified in reservation")
@@ -321,7 +322,7 @@ class Database:
                 current_time : pd.Timestamp = day_start
                 while current_time + reservation_duration <= day_end:
                     # Skip past times for today
-                    if new_reservation.day.date() == now.date() and LOCAL_TIMEZONE.localize(current_time.to_pydatetime()) <= now:
+                    if new_reservation.day.date() == now.date() and pytz.utc.localize(current_time.to_pydatetime()) <= now:
                         current_time += slot_duration
                         continue
                     
@@ -333,8 +334,8 @@ class Database:
                         is_available = True
                         # Check for overlapping reservations
                         for _, reservation in reservations_df.iterrows():
-                            if (LOCAL_TIMEZONE.localize(current_time) < reservation['time_to'] and 
-                                LOCAL_TIMEZONE.localize(slot_end_time) > reservation['time_from'] and 
+                            if (pytz.utc.localize(current_time) < reservation['time_to'] and 
+                                pytz.utc.localize(slot_end_time) > reservation['time_from'] and 
                                 place == reservation['place']):
                                 is_available = False
                                 break
@@ -346,14 +347,14 @@ class Database:
                     if available_places:
                         time_key = current_time.strftime('%H:%M')
                         available_slots[time_key] = available_places
-                    
+
                     current_time += slot_duration
                 
                 return available_slots
-                
         except Exception as e:
             logger.error(f"Error getting available timeslots: {str(e)}")
             return {}
+
 
     def get_upcoming_unpaid_reservations(self) -> List[models.Reservation]:
         """
@@ -399,7 +400,7 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting reservations without payment: {str(e)}")
             return []
-        
+
 
     # def get_available_places_for_timeslot(self, new_reservation: 'Reservation', time_from: time, time_to: time) -> List[int] | None:
     #     """
@@ -434,13 +435,13 @@ class Database:
     #                 time_from >= time_to):
     #                 logger.error("Requested time is outside working hours or invalid")
     #                 return None
-                
+
     #             # Validate not in past
     #             now = datetime.now(pytz.UTC)
     #             if datetime_from <= now:
     #                 logger.error("Requested time is in the past")
     #                 return None
-                
+
     #             # Get existing reservations for the timeframe
     #             overlapping_reservations = session.query(models.Reservation).filter(
     #                 and_(
@@ -450,25 +451,25 @@ class Database:
     #                     models.Reservation.time_to > datetime_from
     #                 )
     #             ).all()
-                
+
     #             # Get all occupied places
     #             occupied_places = {r.place for r in overlapping_reservations}
-                
+
     #             # Get all possible places for this type from config
     #             all_places = places.get(new_reservation.type)
-                
+
     #             if not all_places:
     #                 logger.error(f"No places configured for type {new_reservation.type}")
     #                 return None
-                
+
     #             # Calculate available places
     #             available_places = [
     #                 place for place in all_places 
     #                 if place not in occupied_places
     #             ]
-                
+
     #             return sorted(available_places)
-                
+
     #     except Exception as e:
     #         logger.error(f"Error getting available places: {str(e)}")
     #         return None
@@ -721,7 +722,7 @@ class Database:
 
     def _find_available_days(self, session: Session, new_reservation: 'Reservation') -> List[datetime]:
         now = datetime.now(LOCAL_TIMEZONE)
-        end_date = now + timedelta(days=self.config.workday_settings['lookforward_days'])
+        end_date = now + timedelta(days=days_lookforward)
         
         # Get existing reservations
         existing_reservations = self._get_existing_reservations(

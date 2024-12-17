@@ -6,25 +6,20 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 # Message texts
-WELCOME_MESSAGE = 'Welcome to Ikigai bot! 🎉'
+WELCOME_MESSAGE = 'Добро пожалоть в Ikigai бот! 🎉'
 SELECT_WORKPLACE_MESSAGE = 'Какое рабочее место Вам нужно?'
-SELECT_TIME_MESSAGE = 'How much time do you need?'
-SELECT_DATE_MESSAGE = 'Выберете подходящий для вас день:'
-SELECT_TIME_SLOT_MESSAGE = 'Выбетере подходящее для вас время'
+SELECT_TIME_MESSAGE = 'Сколько времени вам нужно?'
+SELECT_DATE_MESSAGE = 'Выберете подходящий для вас день.'
+SELECT_TIME_SLOT_MESSAGE = 'Выбетере подходящее для вас время.'
 SELECT_SEAT_MESSAGE = 'Выберете рабочее место.'
 
 
-INFO_MESSAGE = '''*Beauty Coworking ikigai* - это рабочее пространство для профессионалов индустрии красоты. 
-
-- Мы предоставляем удобные и функциональные рабочие места для визажистов, бровистов и стилистов, которые ценят комфорт и качество в своей работе.
-
-- Мы создали Beauty Coworking с целью поддерживать начинающих предпринимателей в их деловом росте.
-
-- Наша миссия - предоставить доступное и функциональное пространство для работы и развития вашего бизнеса в области красоты.
-
+INFO_MESSAGE = '''*Beauty Coworking Ikigai* - это рабочее пространство для профессионалов индустрии красоты.\n\n
+- Мы предоставляем удобные и функциональные рабочие места для визажистов, бровистов и стилистов, которые ценят комфорт и качество в своей работе.\n
+- Мы создали Beauty Coworking с целью поддерживать начинающих предпринимателей в их деловом росте.\n
+- Наша миссия - предоставить доступное и функциональное пространство для работы и развития вашего бизнеса в области красоты.\n
 *Присоединяйтесь к Beauty Coworking ikigai* и обеспечьте себе идеальное рабочее окружение для достижения профессиональных целей в индустрии красоты.
 '''
-
 
 MY_RESERVATIONS_MESSAGE = 'Ваши резервации:'
 MY_RESERVATIONS_MESSAGE_NO_RESERVATIONS = 'У Вас пока нет ни одной активной резервации.'
@@ -69,7 +64,7 @@ def escape_markdown(text: str) -> str:
 
 # WTF? Why here?
 def format_reservation_recap(reservation: Reservation):
-    return f'''*Ваша резервация:*
+    return f'''*Ваша резервация*:
 *Дата:* {reservation.day.strftime('%d.%m.%Y')}
 *Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}
@@ -81,8 +76,8 @@ def format_pay_from_recap(sum: float):
     return f'''Мы принимаем оплату онлайн-банк *Revolut*.
 - *Сумма*: *{sum}* CZK
 
-FROM RECAP
-После оплаты, пожалуйста, пришлите подтверждение TODO!!!
+После оплаты, пожалуйста, пришлите подтверждение.
+Это может быть скриншот с суммой и адресом перевода.
 Спасибо! ✨
 '''
 
@@ -91,19 +86,20 @@ def format_pay_from_my_reservations(sum: float):
     return f'''Мы принимаем оплату онлайн-банк *Revolut*.
 - *Сумма*: *{sum}* CZK
 
-FROM MY RESERVATIONS
-После оплаты, пожалуйста, пришлите подтверждение TODO!!!
+После оплаты, пожалуйста, пришлите подтверждение.
+Это может быть скриншот с суммой и адресом перевода.
 Спасибо! ✨
 '''
 
 def format_change_paycheck():
-    return f'''Если вы хотите заменить чек для этой резервации просто пришлите ешо сюда! TODO!!!
+    return f'''Если вы хотите заменить чек для этой резервации просто пришлите ешо сюда!\n
 Спасибо! ✨
 '''
 
 
 def format_reservation_created(reservation: Reservation):
     return f'''🎉 *Ваша резервация подтверждена и ждет оплаты!*
+
 *Дата:* {reservation.day.strftime('%d.%m.%Y')}
 *Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}
@@ -132,7 +128,6 @@ Client: {user_link}
 Day: {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
 Time: {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')} \\({reservation.period} hours\\)
 Sum: {reservation.sum} CZK
-{'⚠️ not payed' if not reservation.payed else '✅ payed'}
 '''
 
 def format_reservation_deleted_admin_notification(reservation: Reservation):
@@ -149,11 +144,12 @@ Day: {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
 Time: {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')} \\({int(reservation.period)} hours\\)
 Sum: {escape_markdown(str(reservation.sum))} CZK
 Order ID: `{escape_markdown(reservation.order_id)}`
-{'✅ Was not payed' if not reservation.payed else '⚠️ Was payed'}
+{'✅ Was not payed' if not reservation.payment_confirmation_file_id else '⚠️ Was payed'}
 '''
 
 def format_reservation_created_and_payed(reservation: Reservation):
     return f'''🎉 *Ваша резервация подтверждена и оплачена\\!*
+
 *Дата:* {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}
 *Время:* {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')}
 *Место:* {reservation.place}
@@ -161,35 +157,27 @@ def format_reservation_created_and_payed(reservation: Reservation):
 До встречи\\!
 '''
 
-def format_payment_confirm_request(reservation: Reservation):
-    return f'''🎉 *Ваша резервация подтверждена!*
-*Дата:* {reservation.day.strftime('%d.%m.%Y')}
-*Время:* {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')}
-*Место:* {reservation.place}
-
-Пожалуйста, пришлите нам подтверждение об оплате. 
-Это может быть скриншот с суммой и адресом перевода.
-Его можно скинуть как фотку прямо сюда или позже через меню *"Мои резервации"*
-
-До встречи\\!
-'''
-
 
 def format_user_reminder(reservation: Reservation):
-    return f"""⚠️ *Напоминание об оплате*\n\n
-*Дата:* {escape_markdown(reservation.day.strftime('%d.%m.%Y'))}\n
-*Время:* {reservation.time_from.strftime('%H:%M')} \\- {reservation.time_to.strftime('%H:%M')}\n
-*Место:* {reservation.place}\n
-*Сумма:* {escape_markdown(str(reservation.sum))} CZK\n\n"""
+    return f"""⚠️ *Напоминание об оплате*
+
+*Дата:* {reservation.day.strftime('%d.%m.%Y')}
+*Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
+*Место:* {reservation.place}
+*Сумма:* {str(reservation.sum)} CZK"""
 
 
 def format_reservation_deleted(reservation: Reservation):
 
-    return f"""❌ *Ваша резервация была отменена*\n\n"
-f"Дата: {reservation.day.strftime('%d.%m.%Y')}\n"
-f"Время: {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}\n"
-f"Место: {reservation.place}\n\n"
-"Причина: отсутствие оплаты в течение 24 часов."""
+    return f"""❌ *Ваша резервация была отменена*
+Причина: отсутствие оплаты.
+
+*Резервация:*
+*Дата:* {reservation.day.strftime('%d.%m.%Y')}
+*Время:* {reservation.time_from.strftime('%H:%M')} - {reservation.time_to.strftime('%H:%M')}
+*Место:* {reservation.place}
+*Сумма:* {str(reservation.sum)} CZK
+"""
 
 
 def format_payment_confirm_receive(reservation: Reservation):   # TODO
