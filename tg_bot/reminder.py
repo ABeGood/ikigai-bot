@@ -98,10 +98,12 @@ class ReminderSystem:
         self.reminder_thresholds_from_creation = config.reminder_thresholds_from_creation
         self.reminder_thresholds_from_start = config.reminder_thresholds_from_start
 
-        self.check_interval, self.threshold_window = calculate_check_params(
-            self.reminder_thresholds_from_creation,
-            self.reminder_thresholds_from_start
-        )
+        # self.check_interval, self.threshold_window = calculate_check_params(
+        #     self.reminder_thresholds_from_creation,
+        #     self.reminder_thresholds_from_start
+        # )
+
+        self.check_interval, self.threshold_window = 10, timedelta(minutes=6)
 
         self.last_admin_notification = None
         self._stop_event = threading.Event()
@@ -134,7 +136,7 @@ class ReminderSystem:
         
         urgency_messages = [
             "⚠️ До начала вашей резервации осталось 2 часа. \nПожалуйста, оплатите бронирование сейчас.",
-            "🚨 Важно \n\nДо начала вашей резервации осталось 20 минут! \n\nРезервация будет отменена через 10 минут, если оплата не поступит."
+            "🚨 Важно \n\nДо начала вашей резервации осталось 30 минут! \n\nРезервация будет отменена через 10 минут, если оплата не поступит."
         ]
         
         markup = messages.get_user_reminder_keyboard(reservation.order_id)

@@ -45,6 +45,7 @@ class TelegramBot:
         self.state_storage = StateMemoryStorage()
         self.reservations_db = reservations_db
         self.bot = telebot.TeleBot(token=bot_token, state_storage=self.state_storage)
+        self.admin_messages = {}
 
         self.reminder_system = ReminderSystem(self)
         self.logger = logging.getLogger(__name__)
@@ -86,25 +87,32 @@ class TelegramBot:
         state_data = self.bot.retrieve_data(user_id)
         return state_data.data.get('prev_state') if state_data else None
 
-    def notify_admin(self, text:str, reservation:Reservation|None = None):
+    def notify_admin(self, text:str, reservation:Reservation|None = None, save_msg_id = False):
         if not reservation:
-            self.bot.send_message(chat_id=config.admin_chat_id, text=text, parse_mode=ParseMode.MARKDOWN_V2)
+            msg = self.bot.send_message(chat_id=config.admin_chat_id, text=text, parse_mode=ParseMode.MARKDOWN)
         else:
             keyboard = messages.get_admin_payment_keyboard(reservation.order_id)
-            self.bot.send_photo(
+            msg = self.bot.send_photo(
                 chat_id=config.admin_chat_id,
                 photo=reservation.payment_confirmation_file_id,
                 caption=messages.format_payment_confirm_receive_admin_notification(reservation),
-                parse_mode=ParseMode.MARKDOWN_V2,
+                parse_mode=ParseMode.MARKDOWN,
                 reply_markup=keyboard
             )
+
+            if save_msg_id:
+                if reservation.order_id not in self.admin_messages:
+                    self.admin_messages[reservation.order_id] = []
+                    self.admin_messages[reservation.order_id].append(msg.message_id)
+
+        return msg.message_id
 
 
     def register_admin_payment_handlers(self):
         @self.bot.callback_query_handler(func=lambda call: call.data.startswith(('confirm_payment_', 'reject_payment_')))
-        def handle_admin_payment_action(call):
+        def handle_admin_payment_confirmation(call):
             # Verify it's coming from admin chat
-            if call.message.chat.id != config.admin_chat_id:
+            if call.message.chat.id != int(config.admin_chat_id):
                 return
             
             action = None
@@ -125,47 +133,65 @@ class TelegramBot:
                 
             if action == 'confirm':
                 # Update reservation status
-                reservation = self.reservations_db.update_reservation(reservation_id, {'payed': True})
-                
-                # Notify admin
-                self.bot.edit_message_caption(
-                    chat_id=call.message.chat.id,
-                    message_id=call.message.message_id,
-                    caption=f"{messages.format_reservation_created_and_payed(reservation=reservation)}\n✅ Payment confirmed",
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                
-                # Notify user
-                self.bot.send_message(
-                    chat_id=reservation.telegram_id,
-                    text=messages.format_reservation_created_and_payed(reservation),
-                    parse_mode=ParseMode.MARKDOWN
-                )
+                reservation = self.reservations_db.update_reservation_paid_field(reservation_id, {'payed': True})
+                if reservation:
+                    # Notify admin
+                    self.bot.edit_message_caption(
+                        chat_id=call.message.chat.id,
+                        message_id=call.message.message_id,
+                        caption=f"✅ Payment confirmed\n{messages.format_payment_admin_action(reservation=reservation)}",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                    
+                    # Notify user
+                    self.bot.send_message(
+                        chat_id=reservation.telegram_id,
+                        text=messages.format_reservation_confirmed_by_admin(reservation, action=action),
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                else:
+                    self.bot.delete_message(
+                            chat_id=call.message.chat.id,
+                            message_id=call.message.message_id,
+                        )
                 
             elif action == 'reject':
-                reservation = self.reservations_db.update_reservation(reservation_id, {'payment_confirmation_link': None})
-                # Keep reservation unpaid
-                # Notify admin
-                self.bot.edit_message_caption(
-                    chat_id=call.message.chat.id,
-                    message_id=call.message.message_id,
-                    caption=f"{messages.format_reservation_created_and_payed(reservation=reservation)}\n❌ Payment rejected",
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f'Reservation {reservation_id} rejected ')
-                markup = messages.get_user_reminder_keyboard(str(reservation_id))
+                reservation = self.reservations_db.update_reservation_paid_field(reservation_id, {'payment_confirmation_link': None})
+                if reservation:
+                    # Keep reservation unpaid
+                    # Notify admin
+                    self.bot.edit_message_caption(
+                        chat_id=call.message.chat.id,
+                        message_id=call.message.message_id,
+                        caption=f"❌ Payment rejected\n{messages.format_payment_admin_action(reservation=reservation)}",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                    logging.info(f'Reservation {reservation_id} rejected ')
+                    markup = messages.get_user_reminder_keyboard(str(reservation_id))
+                    
+                    # Notify user about rejection
+                    self.bot.send_message(
+                        chat_id=reservation.telegram_id,
+                        text=messages.format_reservation_confirmed_by_admin(reservation, action=action),
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=markup
+                    )
+                else:
+                    self.bot.delete_message(
+                            chat_id=call.message.chat.id,
+                            message_id=call.message.message_id,
+                        )
+
+            # Delete all messages for this reservation
+            if reservation_id in self.admin_messages:
+                for msg_id in self.admin_messages[reservation_id]:
+                    try:
+                        self.bot.delete_message(config.admin_chat_id, msg_id)
+                    except Exception as e:
+                        self.logger.error(f"Failed to delete message {msg_id}: {e}")
                 
-                # Notify user about rejection
-                self.bot.send_message(
-                    chat_id=reservation.telegram_id,
-                    text=(
-                        "❌ Ваше подтверждение оплаты было отклонено\\.\n\n"
-                        "Пожалуйста, убедитесь, что сумма и получатель платежа верны, "
-                        "и отправьте новое подтверждение\\."
-                    ),  # AG: TODO reservation info
-                    parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=markup
-                )
+                # Clear the message IDs from memory
+                del self.admin_messages[reservation_id]
 
 
     def register_handlers(self):
@@ -239,7 +265,7 @@ class TelegramBot:
                     chat_id=config.admin_chat_id,
                     photo=file_id,
                     caption=messages.format_payment_confirm_receive_admin_notification(payed_reservation),
-                    parse_mode=ParseMode.MARKDOWN_V2,
+                    parse_mode=ParseMode.MARKDOWN,
                     reply_markup=keyboard
                 )
                 self.bot.set_state(user_id=user_id, state=BotStates.state_start)
@@ -259,7 +285,7 @@ class TelegramBot:
                     chat_id=config.admin_chat_id,
                     photo=file_id,
                     caption=messages.format_payment_confirm_receive_admin_notification(payed_reservation),
-                    parse_mode=ParseMode.MARKDOWN_V2,
+                    parse_mode=ParseMode.MARKDOWN,
                     reply_markup=keyboard
                 )
                 self.bot.set_state(user_id=user_id, state=BotStates.state_start)
@@ -287,7 +313,7 @@ class TelegramBot:
                         chat_id=config.admin_chat_id,
                         photo=file_id,
                         caption=messages.format_payment_confirm_receive_admin_notification(reservation),
-                        parse_mode=ParseMode.MARKDOWN_V2,
+                        parse_mode=ParseMode.MARKDOWN,
                         reply_markup=keyboard
                     )
                     self.bot.set_state(user_id=user_id, state=BotStates.state_start)
@@ -408,11 +434,11 @@ class TelegramBot:
                 reservation_message_text = MY_RESERVATIONS_MESSAGE
                 for r in my_reservations:
                     # Format datetime for button display
-                    day_str = r.day.strftime("%d.%m.%Y")
+                    day_str = r.day.strftime("%d.%m.%y")
                     time_from_str = r.time_from.strftime("%H:%M")
                     time_to_str = r.time_to.strftime("%H:%M")
                     
-                    button_text = f'{messages.get_status_string(r)} {day_str} {time_from_str} - {time_to_str}'
+                    button_text = f'{messages.get_status_string(r)} {day_str} {time_from_str} - {time_to_str} '
                     markup.add(InlineKeyboardButton(
                         text=button_text,
                         callback_data=r.order_id
@@ -535,7 +561,7 @@ class TelegramBot:
                        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
                        )
             reservation_info = format_reservation_info(reservation)
-            bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup)
+            bot.edit_message_text(chat_id=chatId, message_id=messageId, text=reservation_info, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
         else:
             markup.add(InlineKeyboardButton(CHANGE_PAYCHECK_BUTTON, callback_data=f'change-pay_{reservation_id}'),
                        InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
@@ -543,12 +569,15 @@ class TelegramBot:
             bot.delete_message(chat_id=chatId, message_id=messageId)
             reservation_info = format_reservation_info(reservation)
 
+
+
             try:
                 bot.send_photo(
                     chat_id=chatId,
                     photo=reservation.payment_confirmation_file_id,
                     caption=reservation_info,
-                    reply_markup=markup
+                    reply_markup=markup,
+                    parse_mode=ParseMode.MARKDOWN
                 )
             except Exception as e:  # AG TODO: Notify admin
                 # If there's an error sending the photo (e.g., expired link),
@@ -739,35 +768,35 @@ class TelegramBot:
         # Create time slot buttons
         buttons = []
         
-        now = dt.now(config.LOCAL_TIMEZONE)
-        workday_start = config.workday_start
-        workday_end = config.workday_end
+        # now = dt.now(config.LOCAL_TIMEZONE)
+        # workday_start = config.workday_start
+        # workday_end = config.workday_end
         
-        if date == now.date():
-            # Add buffer minutes to current time
-            buffer_time = now + timedelta(minutes=config.time_buffer_mins)
+        # if date == now.date():
+        #     # Add buffer minutes to current time
+        #     buffer_time = now + timedelta(minutes=config.time_buffer_mins)
             
-            # If we're before workday start, use workday start
-            if buffer_time.time() < workday_start:
-                time_start_search = dt.combine(date, time(workday_start.hour, 0))
-                # Make timezone-aware
-                time_start_search = config.LOCAL_TIMEZONE.localize(time_start_search)
-            else:
-                # Calculate minutes since start of day
-                minutes_since_midnight = buffer_time.hour * 60 + buffer_time.minute
-                # Round up to next stride interval
-                next_slot_minutes = math.ceil(minutes_since_midnight / config.stride_mins) * config.stride_mins
-                # Convert back to datetime and make timezone-aware
-                naive_time = dt.combine(date, time(0, 0)) + timedelta(minutes=next_slot_minutes)
-                time_start_search = config.LOCAL_TIMEZONE.localize(naive_time)
+        #     # If we're before workday start, use workday start
+        #     if buffer_time.time() < workday_start:
+        #         time_start_search = dt.combine(date, time(workday_start.hour, 0))
+        #         # Make timezone-aware
+        #         time_start_search = config.LOCAL_TIMEZONE.localize(time_start_search)
+        #     else:
+        #         # Calculate minutes since start of day
+        #         minutes_since_midnight = buffer_time.hour * 60 + buffer_time.minute
+        #         # Round up to next stride interval
+        #         next_slot_minutes = math.ceil(minutes_since_midnight / config.stride_mins) * config.stride_mins
+        #         # Convert back to datetime and make timezone-aware
+        #         naive_time = dt.combine(date, time(0, 0)) + timedelta(minutes=next_slot_minutes)
+        #         time_start_search = config.LOCAL_TIMEZONE.localize(naive_time)
                 
-                # If calculated time is before workday start, use workday start
-                if time_start_search.time() < workday_start:
-                    time_start_search = config.LOCAL_TIMEZONE.localize(dt.combine(date, time(workday_start.hour, 0)))
-        else:
-            # If not today, start from beginning of workday
-            naive_time = dt.combine(date, time(workday_start.hour, 0))
-            time_start_search = config.LOCAL_TIMEZONE.localize(naive_time)
+        #         # If calculated time is before workday start, use workday start
+        #         if time_start_search.time() < workday_start:
+        #             time_start_search = config.LOCAL_TIMEZONE.localize(dt.combine(date, time(workday_start.hour, 0)))
+        # else:
+        #     # If not today, start from beginning of workday
+        #     naive_time = dt.combine(date, time(workday_start.hour, 0))
+        #     time_start_search = config.LOCAL_TIMEZONE.localize(naive_time)
 
         # Calculate end of workday considering reservation period
         # workday_end = dt.combine(date, config.workday_end) - timedelta(hours=new_reservation.period)
@@ -822,11 +851,13 @@ class TelegramBot:
             markup.add(InlineKeyboardButton(f'Место {place}', callback_data=f'place_{place}'),)
 
         markup.add(InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),)
-
         chatId = callback.message.chat.id
         messageId = callback.message.message_id
         bot.delete_message(chat_id=chatId, message_id=messageId)
-        bot.send_photo(chat_id=chatId, caption=SELECT_SEAT_MESSAGE, photo=open('img/seats/places_all.jpg', 'rb'), reply_markup=markup)
+        bot.send_photo(chat_id=chatId, 
+                       caption=SELECT_SEAT_MESSAGE, 
+                       photo=open(config.place_images[new_reservation.type], 'rb'), 
+                       reply_markup=markup)
 
     def callback_in_reservation_menu_place(self, call):
         global new_reservation
@@ -850,14 +881,15 @@ class TelegramBot:
             InlineKeyboardButton(BACK_BUTTON, callback_data='cb_back'),
         )
         
-        img_path = f'img/seats/places_{new_reservation.place}.jpg'
+        # img_path = f'img/seats/places_{new_reservation.place}.jpg'
 
         recap_string = format_reservation_recap(new_reservation)
 
         chatId = callback.message.chat.id
         messageId = callback.message.message_id
         bot.delete_message(chat_id=chatId, message_id=messageId)
-        bot.send_photo(callback.message.chat.id, caption=recap_string, photo=open(img_path, 'rb'), reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+        # bot.send_photo(callback.message.chat.id, caption=recap_string, photo=open(img_path, 'rb'), reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+        bot.send_message(callback.message.chat.id, text=recap_string, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
 
     def callback_in_reservation_menu_recap(self, call):
         global new_reservation

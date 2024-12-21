@@ -74,7 +74,7 @@ def delete_reservation(order_id):
 @app.route('/api/reservations/<order_id>', methods=['PUT'])
 def update_reservation(order_id):
     data = request.json
-    success = db.update_reservation(order_id, data)
+    success = db.update_reservation_paid_field(order_id, data)
     return jsonify({'success': success})
 
 if __name__ == '__main__':
