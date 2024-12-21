@@ -15,7 +15,7 @@ from functools import lru_cache
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from db import models
-from tg_bot.config import places, workday_start, workday_end, days_lookforward, LOCAL_TIMEZONE
+from tg_bot.config import places, workday_start, workday_end, days_lookforward, LOCAL_TIMEZONE, stride_mins, time_buffer_mins
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -136,7 +136,7 @@ class Database:
         try:
             with self.get_db() as session:
                 # Get current datetime in UTC
-                current_datetime = datetime.now(LOCAL_TIMEZONE)
+                current_datetime = datetime.now(LOCAL_TIMEZONE).replace(tzinfo=pytz.UTC)  # Kostyl
                 current_date = current_datetime.date()
                 
                 # Query upcoming reservations
@@ -298,7 +298,7 @@ class Database:
                 available_slots = {}
                 
                 # Calculate time slots
-                slot_duration = timedelta(minutes=30)  # 30-minute intervals
+                slot_duration = timedelta(minutes=stride_mins)  # 30-minute intervals
                 reservation_duration = timedelta(hours=new_reservation.period)
                 
                 # Set time boundaries
@@ -316,13 +316,13 @@ class Database:
                 )
                 
                 # Current time for today's checks
-                now = datetime.now(LOCAL_TIMEZONE)
+                now = datetime.now(LOCAL_TIMEZONE) + timedelta(minutes=time_buffer_mins)
                 
                 # Iterate through time slots
                 current_time : pd.Timestamp = day_start
                 while current_time + reservation_duration <= day_end:
                     # Skip past times for today
-                    if new_reservation.day.date() == now.date() and pytz.utc.localize(current_time.to_pydatetime()) <= now:
+                    if new_reservation.day.date() == now.date() and LOCAL_TIMEZONE.localize(current_time.to_pydatetime()) <= now:
                         current_time += slot_duration
                         continue
                     
@@ -561,13 +561,79 @@ class Database:
             logger.error(f"Error deleting reservation {order_id}: {str(e)}")
             return None
         
-    def update_reservation(self, order_id: str, update_data: dict) -> bool:
+    # def update_reservation(self, order_id: str, update_data: dict) -> bool:
+    #     """
+    #     Update a reservation with new data.
+        
+    #     Args:
+    #         order_id: Unique identifier of the reservation
+    #         update_data: Dictionary containing fields to update
+            
+    #     Returns:
+    #         Boolean indicating success or failure of update
+    #     """
+    #     try:
+    #         with self.get_db() as session:
+    #             # Find the reservation
+    #             reservation = session.query(models.Reservation).filter(
+    #                 models.Reservation.order_id == order_id
+    #             ).first()
+                
+    #             if not reservation:
+    #                 logger.error(f"Reservation not found for order_id: {order_id}")
+    #                 return False
+                
+    #             # List of allowed fields to update
+    #             allowed_fields = {
+    #                 # 'name', 'type', 'place', 'day',
+    #                 'time_from', 'time_to', 'period', 'payed',
+    #                 'payment_confirmation_link',
+    #                 'payment_confirmation_file_id'
+    #             }
+                
+    #             # Update only allowed fields
+    #             for key, value in update_data.items():
+    #                 if key in allowed_fields:
+    #                     # Handle datetime fields
+    #                     if key in ['time_from', 'time_to']:
+    #                         if value:
+    #                             # Ensure timezone awareness
+    #                             value = datetime.fromisoformat(value) if isinstance(value, str) else value
+    #                     elif key == 'day':
+    #                         if value:
+    #                             # Convert string date to date object if needed
+    #                             value = (
+    #                                 datetime.strptime(value, '%Y-%m-%d').date()
+    #                                 if isinstance(value, str)
+    #                                 else value
+    #                             )
+                        
+    #                     setattr(reservation, key, value)
+                
+    #             # Validate updated reservation
+    #             if not self._validate_reservation_update(session, reservation):
+    #                 session.rollback()
+    #                 return False
+                
+    #             session.commit()
+    #             return reservation
+                
+    #     except SQLAlchemyError as e:
+    #         logger.error(f"Database error updating reservation {order_id}: {str(e)}")
+    #         return False
+    #     except Exception as e:
+    #         logger.error(f"Error updating reservation {order_id}: {str(e)}")
+    #         return False
+
+
+    def update_reservation_paid_field(self, order_id: str, update_data: dict, force: bool = False) -> bool:
         """
         Update a reservation with new data.
         
         Args:
             order_id: Unique identifier of the reservation
             update_data: Dictionary containing fields to update
+            force: If True, override all fields including payed status. If False, respect existing payed status.
             
         Returns:
             Boolean indicating success or failure of update
@@ -586,7 +652,8 @@ class Database:
                 # List of allowed fields to update
                 allowed_fields = {
                     # 'name', 'type', 'place', 'day',
-                    'time_from', 'time_to', 'period', 'payed',
+                    # 'time_from', 'time_to', 'period', 
+                    'payed',
                     'payment_confirmation_link',
                     'payment_confirmation_file_id'
                 }
@@ -594,19 +661,23 @@ class Database:
                 # Update only allowed fields
                 for key, value in update_data.items():
                     if key in allowed_fields:
+                        # Special handling for payed field
+                        if key == 'payed' and not force and getattr(reservation, 'payed'):
+                            return False
+
                         # Handle datetime fields
-                        if key in ['time_from', 'time_to']:
-                            if value:
-                                # Ensure timezone awareness
-                                value = datetime.fromisoformat(value) if isinstance(value, str) else value
-                        elif key == 'day':
-                            if value:
-                                # Convert string date to date object if needed
-                                value = (
-                                    datetime.strptime(value, '%Y-%m-%d').date()
-                                    if isinstance(value, str)
-                                    else value
-                                )
+                        # if key in ['time_from', 'time_to']:
+                        #     if value:
+                        #         # Ensure timezone awareness
+                        #         value = datetime.fromisoformat(value) if isinstance(value, str) else value
+                        # elif key == 'day':
+                        #     if value:
+                        #         # Convert string date to date object if needed
+                        #         value = (
+                        #             datetime.strptime(value, '%Y-%m-%d').date()
+                        #             if isinstance(value, str)
+                        #             else value
+                        #         )
                         
                         setattr(reservation, key, value)
                 
@@ -617,13 +688,14 @@ class Database:
                 
                 session.commit()
                 return reservation
-                
+            
         except SQLAlchemyError as e:
             logger.error(f"Database error updating reservation {order_id}: {str(e)}")
             return False
         except Exception as e:
             logger.error(f"Error updating reservation {order_id}: {str(e)}")
             return False
+
 
     def update_payment_confirmation(self, reservation_id: str, payment_confirmation_link: str, payment_confirmation_file_id: str) -> models.Reservation|None:
         """Update payment confirmation link for a reservation"""

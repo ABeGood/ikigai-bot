@@ -1,2 +1,2 @@
-bot: python main.py
-web: gunicorn -w 4 -k uvicorn.workers.UvicornWorker admin.app:app
+web: python -m flask run --host=0.0.0.0 --port=$PORT
+worker: python bot_run.py
